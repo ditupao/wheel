@@ -4,4 +4,8 @@
 #include <base.h>
 #include <arch.h>
 
+#include <libk/ctype.h>
+#include <libk/string.h>
+#include <libk/vsprintf.h>
+
 #endif // WHEEL_H

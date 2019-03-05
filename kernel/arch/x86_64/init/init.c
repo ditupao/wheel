@@ -6,7 +6,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx __UNUSED) {
     video[1] = 0x4e;
 
     serial_dev_init();
-    serial_puts("hello, world!\r\n");
+    dbg_print("hello, world!\r\n");
 
     while (1) {}
 }

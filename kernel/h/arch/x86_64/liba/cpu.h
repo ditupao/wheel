@@ -4,6 +4,14 @@
 #include <base.h>
 #include <arch.h>
 
+// global data
+extern __INITDATA u32 cpu_installed;
+extern            u32 cpu_activated;
+extern            u64 percpu_base;
+extern            u64 percpu_size;
+extern __PERCPU   u32 int_depth;
+extern __PERCPU   u64 int_stack_ptr;
+
 //------------------------------------------------------------------------------
 // inline assembly functions
 
@@ -112,5 +120,22 @@ static inline void * phys_to_virt(usize pa) {
     }
     return NULL;
 }
+
+static inline u32 cpu_index() {
+    return (read_gsbase() - percpu_base) / percpu_size;
+}
+
+static inline void * calc_percpu_addr(u32 cpu, void * ptr) {
+    return (void *) ((char *) ptr + percpu_base + percpu_size * cpu);
+}
+
+static inline void * calc_thiscpu_addr(void * ptr) {
+    return (void *) ((char *) ptr + read_gsbase());
+}
+
+#define percpu_ptr(i, var)  ((TYPE(&var)) calc_percpu_addr(i, &var))
+#define thiscpu_ptr(var)    ((TYPE(&var)) calc_thiscpu_addr(&var))
+#define percpu_var(i, var)  (* percpu_ptr(i, var))
+#define thiscpu_var(var)    (* thiscpu_ptr(var))
 
 #endif // ARCH_X86_64_LIBA_CPU_H

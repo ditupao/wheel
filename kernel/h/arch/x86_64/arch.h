@@ -28,6 +28,7 @@
 #include "multiboot.h"
 
 #include "liba/cpu.h"
+#include "liba/acpi.h"
 #include "liba/debug.h"
 
 #include "drvs/serial.h"

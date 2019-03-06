@@ -138,4 +138,12 @@ static inline void * calc_thiscpu_addr(void * ptr) {
 #define percpu_var(i, var)  (* percpu_ptr(i, var))
 #define thiscpu_var(var)    (* thiscpu_ptr(var))
 
+//------------------------------------------------------------------------------
+// essential cpu features
+
+static inline void int_disable() { ASM("cli"); }
+static inline void int_enable () { ASM("sti"); }
+extern        u32  int_lock   ();
+extern        void int_unlock (u32 key);
+
 #endif // ARCH_X86_64_LIBA_CPU_H

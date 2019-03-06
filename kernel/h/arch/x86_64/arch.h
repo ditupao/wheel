@@ -30,6 +30,7 @@
 #include "liba/cpu.h"
 #include "liba/acpi.h"
 #include "liba/debug.h"
+#include "liba/atomic.h"
 
 #include "drvs/serial.h"
 

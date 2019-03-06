@@ -27,7 +27,7 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
     // page array comes right after percpu area
     v_end = (u8 *) ROUND_UP((u64) v_end + cpu_installed * percpu_size, 16);
     page_array = (page_t *) v_end;
-    usize page_count = 0;
+    page_count = 0;
 
     // walk through the memory layout table, fill invalid entries of page array
     mb_mmap_item_t * map_end = (mb_mmap_item_t *) (mmap_base + mmap_size);
@@ -133,6 +133,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     parse_mmap(mmap_base, mmap_size);
 
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
+
+    dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
 
     while (1) {}
 }

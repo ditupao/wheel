@@ -4,6 +4,7 @@
 #include <base.h>
 #include <arch.h>
 
+#include <core/spin.h>
 #include <core/page.h>
 
 #include <libk/ctype.h>

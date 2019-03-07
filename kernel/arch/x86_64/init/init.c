@@ -56,9 +56,11 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
         if ((start < end) && (MB_MEMORY_AVAILABLE == item->type)) {
             if (start < KERNEL_LMA) {
                 dbg_print("+ ram 0x%08llx-0x%08llx.\r\n", start, MIN(KERNEL_LMA, end));
+                page_range_add(start, end);
             }
             if (p_end < end) {
                 dbg_print("+ ram 0x%08llx-0x%08llx.\r\n", MAX(start, p_end), end);
+                page_range_add(start, end);
             }
         }
         item = (mb_mmap_item_t *) ((u64) item + item->size + sizeof(item->size));
@@ -130,7 +132,10 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     parse_madt(acpi_madt);
 
     // init page frame allocator
+    page_lib_init();
     parse_mmap(mmap_base, mmap_size);
+    dbg_print("page array len is %d, total page count is %d.\r\n",
+        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL|ZONE_HIGHMEM));
 
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
 

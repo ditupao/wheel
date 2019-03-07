@@ -218,7 +218,7 @@ void page_range_free(pfn_t rng, u32 count) {
 
     while (from < to) {
         // compute best order for `from`
-        u32 order = CLZ32(from);
+        u32 order = CTZ32(from);
         if ((order >= ORDER_COUNT) || (from == 0)) {
             order = ORDER_COUNT - 1;
         }
@@ -244,6 +244,36 @@ usize free_page_count(u32 zones) {
         count += zone_highmem.page_count;
     }
     return count;
+}
+
+static void dump_layout(zone_t * zone) {
+    for (u32 o = 0; o < ORDER_COUNT; ++o) {
+        pfn_t blk = zone->list[o].head;
+        if (NO_PAGE == blk) {
+            continue;
+        }
+        dbg_print("-- order %02u:", o);
+        while (NO_PAGE != blk) {
+            dbg_print(" 0x%x", blk);
+            blk = page_array[blk].next;
+        }
+        dbg_print(".\r\n");
+    }
+}
+
+void dump_page_layout(u32 zones) {
+    if (zones & ZONE_DMA) {
+        dbg_print("== zone dma:\r\n");
+        dump_layout(&zone_dma);
+    }
+    if (zones & ZONE_NORMAL) {
+        dbg_print("== zone normal:\r\n");
+        dump_layout(&zone_normal);
+    }
+    if (zones & ZONE_HIGHMEM) {
+        dbg_print("== zone highmem:\r\n");
+        dump_layout(&zone_highmem);
+    }
 }
 
 //------------------------------------------------------------------------------

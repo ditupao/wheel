@@ -35,32 +35,29 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
         pfn_t start = (item->addr + PAGE_SIZE - 1) >> PAGE_SHIFT;
         pfn_t end   = (item->addr + item->len)     >> PAGE_SHIFT;
         if ((start < end) && (MB_MEMORY_AVAILABLE == item->type)) {
-            for (pfn_t p = page_count; p < start; ++p) {
-                page_array[p].type = PT_INVALID;
+            for (; page_count < start; ++page_count) {
+                page_array[page_count].type = PT_INVALID;
             }
-            page_count = end;
+            for (; page_count < end; ++page_count) {
+                page_array[page_count].type = PT_KERNEL;
+            }
         }
         item = (mb_mmap_item_t *) ((u64) item + item->size + sizeof(item->size));
     }
 
-    // mark ram used by kernel image
-    u64 p_end = ROUND_UP(virt_to_phys(&page_array[page_count]), PAGE_SIZE);
-    for (pfn_t p = (KERNEL_LMA >> PAGE_SHIFT); p < (p_end >> PAGE_SHIFT); ++p) {
-        page_array[p].type = PT_KERNEL;
-    }
-
     // walk through the table again, add usable ranges to page frame allocator
+    u64 p_end = ROUND_UP(virt_to_phys(&page_array[page_count]), PAGE_SIZE);
     for (mb_mmap_item_t * item = (mb_mmap_item_t *) mmap_base; item < map_end;) {
         u64 start = ROUND_UP(item->addr, PAGE_SIZE);
         u64 end   = ROUND_DOWN(item->addr + item->len, PAGE_SIZE);
         if ((start < end) && (MB_MEMORY_AVAILABLE == item->type)) {
             if (start < KERNEL_LMA) {
                 dbg_print("+ ram 0x%08llx-0x%08llx.\r\n", start, MIN(KERNEL_LMA, end));
-                page_range_add(start, end);
+                page_range_add(start, MIN(KERNEL_LMA, end));
             }
             if (p_end < end) {
                 dbg_print("+ ram 0x%08llx-0x%08llx.\r\n", MAX(start, p_end), end);
-                page_range_add(start, end);
+                page_range_add(MAX(start, p_end), end);
             }
         }
         item = (mb_mmap_item_t *) ((u64) item + item->size + sizeof(item->size));
@@ -135,10 +132,10 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     page_lib_init();
     parse_mmap(mmap_base, mmap_size);
     dbg_print("page array len is %d, total page count is %d.\r\n",
-        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL|ZONE_HIGHMEM));
+        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
+    dump_page_layout(ZONE_DMA|ZONE_NORMAL);
 
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
-
     dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
 
     while (1) {}

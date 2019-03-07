@@ -44,6 +44,7 @@ extern void  page_block_free (pfn_t blk, u32 order);
 extern pfn_t page_range_alloc(u32 zones, u32 count);
 extern void  page_range_free (pfn_t rng, u32 count);
 extern usize free_page_count (u32 zones);
+extern void  dump_page_layout(u32 zones);
 
 extern __INIT void page_lib_init ();
 extern __INIT void page_range_add(usize start, usize end);

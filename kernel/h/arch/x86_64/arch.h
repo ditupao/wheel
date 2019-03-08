@@ -31,6 +31,8 @@
 #include "liba/acpi.h"
 #include "liba/debug.h"
 #include "liba/atomic.h"
+#include "liba/loapic.h"
+#include "liba/ioapic.h"
 
 #include "drvs/serial.h"
 

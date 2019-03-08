@@ -12,6 +12,43 @@ extern u8 _rodata_end;
 extern u8 _kernel_end;
 
 //------------------------------------------------------------------------------
+// parse madt table, find all local apic and io apic
+
+static __INIT void parse_madt(madt_t * tbl) {
+    u8 * end = (u8 *) tbl + tbl->header.length;
+    u8 * p   = (u8 *) tbl + sizeof(madt_t);
+
+    cpu_installed = 0;
+    cpu_activated = 0;
+
+    loapic_override(tbl->loapic_addr);
+    while (p < end) {
+        acpi_subtbl_t * sub = (acpi_subtbl_t *) p;
+        switch (sub->type) {
+        case MADT_TYPE_IO_APIC:
+            ioapic_dev_add((madt_ioapic_t *) sub);
+            break;
+        case MADT_TYPE_INTERRUPT_OVERRIDE:
+            ioapic_int_override((madt_int_override_t *) sub);
+            break;
+        case MADT_TYPE_LOCAL_APIC:
+            loapic_dev_add((madt_loapic_t *) sub);
+            break;
+        case MADT_TYPE_LOCAL_APIC_OVERRIDE:
+            loapic_override(((madt_loapic_override_t *) sub)->address);
+            break;
+        case MADT_TYPE_LOCAL_APIC_NMI:
+            loapic_set_nmi((madt_loapic_mni_t *) sub);
+            break;
+        default:
+            dbg_print("madt entry type %d not known!\r\n", sub->type);
+            break;
+        }
+        p += sub->length;
+    }
+}
+
+//------------------------------------------------------------------------------
 // parse physical memory map
 
 static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
@@ -65,45 +102,6 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 }
 
 //------------------------------------------------------------------------------
-// parse madt table, find all local apic and io apic
-
-static __INIT void parse_madt(madt_t * tbl) {
-    u8 * end = (u8 *) tbl + tbl->header.length;
-    u8 * p   = (u8 *) tbl + sizeof(madt_t);
-
-    cpu_installed = 0;
-    cpu_activated = 0;
-
-    while (p < end) {
-        acpi_subtbl_t * sub = (acpi_subtbl_t *) p;
-        switch (sub->type) {
-        case MADT_TYPE_IO_APIC:
-            dbg_print("io apic.\r\n");
-            break;
-        case MADT_TYPE_INTERRUPT_OVERRIDE:
-            dbg_print("int override.\r\n");
-            break;
-        case MADT_TYPE_LOCAL_APIC:
-            dbg_print("local apic.\r\n");
-            ++cpu_installed;
-            break;
-        case MADT_TYPE_LOCAL_APIC_OVERRIDE:
-            dbg_print("local apic override.\r\n");
-            break;
-        case MADT_TYPE_LOCAL_APIC_NMI:
-            dbg_print("local apic nmi.\r\n");
-            break;
-        default:
-            dbg_print("madt entry type %d not known!\r\n", sub->type);
-            break;
-        }
-        p += sub->length;
-    }
-
-    cpu_installed = MIN(cpu_installed, MAX_CPU_COUNT);
-}
-
-//------------------------------------------------------------------------------
 // pre-kernel initialization routines
 
 // backup multiboot structures
@@ -116,13 +114,11 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
 
     // backup multiboot info
     mbi = * (mb_info_t *) phys_to_virt(ebx);
-    // TODO: save vbe ctrl info and mode info
 
     // save memory map
     u64 mmap_size = mbi.mmap_length;
     u8  mmap_base[mmap_size];
     memcpy(mmap_base, phys_to_virt(mbi.mmap_addr), mmap_size);
-    // TODO: vbe mode array also needs to be backed up
 
     // parse madt and get multiprocessor info
     acpi_tbl_init();
@@ -131,10 +127,24 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // init page frame allocator
     page_lib_init();
     parse_mmap(mmap_base, mmap_size);
-    dbg_print("page array len is %d, total page count is %d.\r\n",
-        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
-    dump_page_layout(ZONE_DMA|ZONE_NORMAL);
 
+    // init essential cpu functions
+    cpu_init();
+    gdt_init();
+    idt_init();
+    tss_init();
+    write_gsbase(percpu_base);
+
+    // init interrupt handling
+    int_init();
+    ioapic_init_all();
+    loapic_dev_init();
+
+    // ASM("ud2");
+    ASM("sti");
+
+    dbg_print("page array len is %d, valid page count is %d.\r\n",
+        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
     dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
 

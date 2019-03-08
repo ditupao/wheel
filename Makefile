@@ -34,5 +34,4 @@ run: iso
 	@ qemu-system-x86_64 -smp 4 -m 256 -vga vmware -serial stdio -gdb tcp::4444 -cdrom $(ISOFILE)
 
 loc:
-	@ find . -type f -name "*.S" -o -name "*.c" -o -name "*.h" -o \
-	    -name "Makefile" -o -name "*.mk" -o -name "*.ld" | xargs wc -l
+	@ find . -type f -name "*.S" -o -name "*.c" -o -name "*.h" | xargs wc -l

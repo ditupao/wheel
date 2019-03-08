@@ -4,6 +4,16 @@
 #include <base.h>
 #include <arch.h>
 
+typedef struct int_frame {
+    u64 r15;    u64 r14;    u64 r13;    u64 r12;
+    u64 r11;    u64 r10;    u64 r9;     u64 r8;
+    u64 rbp;    u64 rsi;    u64 rdi;    u64 rdx;
+    u64 rcx;    u64 rbx;    u64 rax;    u64 errcode;
+    u64 rip;    u64 cs;     u64 rflags; u64 rsp;    u64 ss;
+} __PACKED int_frame_t;
+
+typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);
+
 // global data
 extern __INITDATA u32 cpu_installed;
 extern            u32 cpu_activated;
@@ -11,6 +21,7 @@ extern            u64 percpu_base;
 extern            u64 percpu_size;
 extern __PERCPU   u32 int_depth;
 extern __PERCPU   u64 int_stack_ptr;
+extern isr_proc_t     isr_tbl[];
 
 //------------------------------------------------------------------------------
 // inline assembly functions
@@ -141,9 +152,14 @@ static inline void * calc_thiscpu_addr(void * ptr) {
 //------------------------------------------------------------------------------
 // essential cpu features
 
+extern __INIT void cpu_init();
+extern __INIT void gdt_init();
+extern __INIT void idt_init();
+extern __INIT void tss_init();
 static inline void int_disable() { ASM("cli"); }
 static inline void int_enable () { ASM("sti"); }
 extern        u32  int_lock   ();
 extern        void int_unlock (u32 key);
+extern __INIT void int_init   ();
 
 #endif // ARCH_X86_64_LIBA_CPU_H

@@ -12,6 +12,11 @@ typedef struct int_frame {
     u64 rip;    u64 cs;     u64 rflags; u64 rsp;    u64 ss;
 } __PACKED int_frame_t;
 
+typedef struct regs {
+    int_frame_t * rsp;      // current int stack frame
+    u64           rsp0;     // value saved in tss->rsp0
+} __PACKED __ALIGNED(16) regs_t;
+
 typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);
 
 // global data

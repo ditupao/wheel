@@ -10,5 +10,6 @@
 #include <libk/ctype.h>
 #include <libk/string.h>
 #include <libk/vsprintf.h>
+#include <libk/list.h>
 
 #endif // WHEEL_H

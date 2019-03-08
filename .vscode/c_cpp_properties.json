@@ -4,8 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/kernel/h/**",
-                "${workspaceFolder}/kernel/h/arch/x86_64/**"
+                "${workspaceFolder}/kernel/h/",
+                "${workspaceFolder}/kernel/h/arch/x86_64/"
             ],
             "defines": [
                 "_DEBUG",

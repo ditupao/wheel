@@ -156,6 +156,7 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
         raw_spin_take(&zone_highmem.lock);
         pfn_t blk = zone_block_alloc(&zone_highmem, order);
         raw_spin_give(&zone_highmem.lock);
+        dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;
         }
@@ -165,6 +166,7 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
         raw_spin_take(&zone_normal.lock);
         pfn_t blk = zone_block_alloc(&zone_normal, order);
         raw_spin_give(&zone_normal.lock);
+        dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;
         }
@@ -174,6 +176,7 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
         raw_spin_take(&zone_dma.lock);
         pfn_t blk = zone_block_alloc(&zone_dma, order);
         raw_spin_give(&zone_dma.lock);
+        dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;
         }
@@ -184,20 +187,12 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
 }
 
 void page_block_free(pfn_t blk, u32 order) {
-    if (order >= ORDER_COUNT) {
-        return; // invalid parameter
-    }
-
     usize size = 1U << order;
-    if ((blk & (size - 1)) != 0) {
-        return; // invalid parameter: block not aligned
-    }
-
     zone_t * zone = zone_for((usize)  blk         << PAGE_SHIFT,
                              (usize) (blk + size) << PAGE_SHIFT);
-    if (NULL == zone) {
-        return; // invalid parameter: block spans over multiple zones
-    }
+    dbg_assert(order < ORDER_COUNT);
+    dbg_assert(0 == (blk & (size - 1)));
+    dbg_assert(NULL != zone);
 
     raw_spin_take(&zone->lock);
     zone_block_free(zone, blk, order);

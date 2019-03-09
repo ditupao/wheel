@@ -23,10 +23,11 @@ typedef struct page {
 } page_t;
 
 // page types
-#define PT_INVALID      0
-#define PT_FREE         1
-#define PT_CACHED       2
-#define PT_KERNEL       3
+#define PT_INVALID      0       // memory hole or mapped device
+#define PT_FREE         1       // not allocated
+#define PT_CACHED       2       // percpu cache
+#define PT_KERNEL       3       // generic kernel usage
+#define PT_KSTACK       4       // task's kernel stack page
 
 // block order
 #define ORDER_COUNT     16

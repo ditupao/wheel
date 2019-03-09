@@ -167,4 +167,10 @@ extern        u32  int_lock   ();
 extern        void int_unlock (u32 key);
 extern __INIT void int_init   ();
 
+//------------------------------------------------------------------------------
+// task support
+
+extern void regs_init(regs_t * regs, void * sp, void * proc,
+                      void * a1, void * a2, void * a3, void * a4);
+
 #endif // ARCH_X86_64_LIBA_CPU_H

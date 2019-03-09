@@ -245,3 +245,31 @@ void syscall_dispatch() {
     dbg_print("handling system call.\r\n");
     // while (1) {}
 }
+
+//------------------------------------------------------------------------------
+// task support
+
+extern __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4);
+
+void regs_init(regs_t * regs, void * sp, void * proc,
+               void * a1, void * a2, void * a3, void * a4) {
+    dbg_assert(0 != regs);
+    dbg_assert(0 != sp);
+    dbg_assert(0 != proc);
+
+    memset(regs, 0, sizeof(regs_t));
+    sp = (void *) ((u64) sp & ~7);
+    regs->rsp    = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
+    regs->rsp0   = (u64) sp;
+
+    regs->rsp->cs     = 0x08;             // kernel code segment
+    regs->rsp->ss     = 0x10;             // kernel data segment
+    regs->rsp->rip    = (u64) task_entry; // entry address
+    regs->rsp->rsp    = (u64) sp;         // stack top
+    regs->rsp->rflags = 0x0200;           // interrupt enabled
+    regs->rsp->rdi    = (u64) proc;
+    regs->rsp->rsi    = (u64) a1;
+    regs->rsp->rdx    = (u64) a2;
+    regs->rsp->rcx    = (u64) a3;
+    regs->rsp->r8     = (u64) a4;
+}

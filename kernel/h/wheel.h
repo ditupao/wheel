@@ -6,6 +6,7 @@
 
 #include <core/spin.h>
 #include <core/page.h>
+#include <core/work.h>
 #include <core/task.h>
 
 #include <libk/ctype.h>

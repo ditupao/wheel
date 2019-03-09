@@ -8,6 +8,11 @@
 .global load_idtr
 .global load_tr
 
+.extern int_depth
+.extern int_stack_ptr
+.extern tid_prev
+.extern tid_next
+
 .extern exp_dispatch
 .extern int_dispatch
 .extern syscall_dispatch
@@ -107,29 +112,49 @@ entry_sc:
 
 // common code for exception handling
 exception_stub:
-    save_regs                       // save all registers
-    movl    %eax, %edi              // rdi = vector number
-    movq    %rsp, %rsi              // rsi = stack frame
+    save_regs                           // save all registers
+    movl    %eax, %edi                  // rdi = vector number
+    movq    %rsp, %rsi                  // rsi = stack frame
 
-    call    exp_dispatch            // execute handler function
+    call    exp_dispatch                // execute handler function
 
-    restore_regs                    // restore all registers
-    addq    $8, %rsp                // skip error code
-    iretq                           // return from exception
+    restore_regs                        // restore all registers
+    addq    $8, %rsp                    // skip error code
+    iretq                               // return from exception
 
 // common code for interrupt handling
 interrupt_stub:
-    save_regs                       // save registers to **current** stack
-    movl    %eax, %edi              // rdi = vector number
-    movq    %rsp, %rsi              // rsi = stack frame
+    save_regs                           // save registers to current stack
+    movl    %eax, %edi                  // rdi = vector number
+    movq    %rsp, %rsi                  // rsi = stack frame
 
+    incl    %gs:(int_depth)
+    movl    %gs:(int_depth), %eax
+    cmpl    $1, %eax                    // check interrupt re-entry
+    jne     _no_stack_switch
+
+    movq    %gs:(tid_prev), %rax
+    movq    %rsp, (%rax)                // save to `tid_prev->regs->rsp`
+    movq    %gs:(int_stack_ptr), %rsp   // switch to interruipt stack
+
+_no_stack_switch:
     sti
-    call    int_dispatch            // execute handler function
+    call    int_dispatch                // execute handler function
     cli
 
-    restore_regs                    // restore all registers
-    addq    $8, %rsp                // skip error code
-    iretq                           // return from exception
+    decl    %gs:(int_depth)
+    movl    %gs:(int_depth), %eax
+    cmpl    $0, %eax
+    jne     _no_stack_restore
+
+    movq    %gs:(tid_next), %rax
+    movq    %rax, %gs:(tid_prev)        // update `tid_prev`
+    movq    (%rax), %rsp                // switch to `tid_next->regs->rsp`
+
+_no_stack_restore:
+    restore_regs                        // restore all registers
+    addq    $8, %rsp                    // skip error code
+    iretq                               // return from exception
 
 //------------------------------------------------------------------------------
 // helper functions, used by `cpu.c`

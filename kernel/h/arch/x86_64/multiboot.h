@@ -28,9 +28,9 @@ typedef struct mb_info {
     u32     mods_count;
     u32     mods_addr;
     union {
-        mb_aout_sym_tbl_t aout_sym;
-        mb_elf_sec_tbl_t  elf_sec;
-    } u;
+        mb_aout_sym_tbl_t aout;
+        mb_elf_sec_tbl_t  elf;
+    };
     u32     mmap_length;
     u32     mmap_addr;
     u32     drives_length;

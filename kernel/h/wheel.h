@@ -8,6 +8,7 @@
 #include <core/page.h>
 #include <core/work.h>
 #include <core/task.h>
+#include <core/elf64.h>
 
 #include <libk/ctype.h>
 #include <libk/string.h>

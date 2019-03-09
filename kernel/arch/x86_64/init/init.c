@@ -11,19 +11,6 @@ extern u8 _text_end;
 extern u8 _rodata_end;
 extern u8 _kernel_end;
 
-typedef struct elf64_shdr {
-    u32 sh_name;
-    u32 sh_type;
-    u64 sh_flags;
-    u64 sh_addr;
-    u64 sh_offset;
-    u64 sh_size;
-    u32 sh_link;
-    u32 sh_info;
-    u64 sh_addralign;
-    u64 sh_entsize;
-} __PACKED elf64_shdr_t;
-
 //------------------------------------------------------------------------------
 // parse madt table, find all local apic and io apic
 
@@ -133,26 +120,32 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     u8  mmap_base[mmap_size];
     memcpy(mmap_base, phys_to_virt(mbi.mmap_addr), mmap_size);
 
-    // save elf section header table
-    u32 shdr_size = (mbi.flags & 0x20) ? (mbi.elf.num * mbi.elf.size) : 0;
-    u8  shdr_base[shdr_size];
-    memcpy(shdr_base, phys_to_virt(mbi.elf.addr), shdr_size);
-
-    elf64_shdr_t * str = (elf64_shdr_t *) &shdr_base[mbi.elf.shndx * mbi.elf.size];
-    dbg_print("string table loaded at %x.\r\n", str->sh_addr);
-
-    // skip first section
+    // parse elf section header table, find symbol table and string table
+    u8 * shtbl    = (u8 *) phys_to_virt(mbi.elf.addr);
+    u8 * sym_addr = NULL;
+    u8 * str_addr = NULL;
+    u64  sym_size = 0;
+    u64  str_size = 0;
     for (u32 i = 1; i < mbi.elf.num; ++i) {
-        elf64_shdr_t * sh = (elf64_shdr_t *) &shdr_base[i * mbi.elf.size];
-        dbg_print(">> type %d. addr %x, size %x, offset %x.\r\n",
-            sh->sh_type, sh->sh_addr, sh->sh_size, sh->sh_offset);
-        if (2 == sh->sh_type) {
-            // symbol table
+        elf64_shdr_t * sh = (elf64_shdr_t *) (shtbl + i * mbi.elf.size);
+        if (mbi.elf.shndx == i) {
+            continue;
         }
-        if (3 == sh->sh_type) {
-            // string table
+        if (SHT_SYMTAB == sh->sh_type) {
+            sym_addr = (u8 *) phys_to_virt(sh->sh_addr);
+            sym_size = sh->sh_size;
+        }
+        if (SHT_STRTAB == sh->sh_type) {
+            str_addr = (u8 *) phys_to_virt(sh->sh_addr);
+            str_size = sh->sh_size;
         }
     }
+
+    // backup symbol table and string table
+    u8 symtab[sym_size];
+    u8 strtab[str_size];
+    memcpy(symtab, sym_addr, sym_size);
+    memcpy(strtab, str_addr, str_size);
 
     // parse madt and get multiprocessor info
     acpi_tbl_init();
@@ -167,6 +160,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     gdt_init();
     idt_init();
     tss_init();
+    dbg_regist(symtab, sym_size, strtab, str_size);
     write_gsbase(percpu_base);
 
     // init interrupt handling
@@ -185,7 +179,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
         page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
     dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
-    // dbg_assert(0);
+    dbg_assert(0);
 
     while (1) {}
 }

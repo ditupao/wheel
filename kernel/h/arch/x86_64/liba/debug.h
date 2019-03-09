@@ -3,6 +3,8 @@
 
 #include <base.h>
 
+extern __INIT void dbg_regist(u8 * sym_tbl, usize sym_len, u8 * str_tbl, usize str_len);
+
 extern void dbg_print(const char * msg, ...);
 extern void dbg_trace();
 

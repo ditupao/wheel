@@ -127,17 +127,14 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     u64  sym_size = 0;
     u64  str_size = 0;
     for (u32 i = 1; i < mbi.elf.num; ++i) {
-        elf64_shdr_t * sh = (elf64_shdr_t *) (shtbl + i * mbi.elf.size);
-        if (mbi.elf.shndx == i) {
-            continue;
-        }
-        if (SHT_SYMTAB == sh->sh_type) {
-            sym_addr = (u8 *) phys_to_virt(sh->sh_addr);
-            sym_size = sh->sh_size;
-        }
-        if (SHT_STRTAB == sh->sh_type) {
-            str_addr = (u8 *) phys_to_virt(sh->sh_addr);
-            str_size = sh->sh_size;
+        elf64_shdr_t * sym = (elf64_shdr_t *) (shtbl + mbi.elf.size * i);
+        elf64_shdr_t * str = (elf64_shdr_t *) (shtbl + mbi.elf.size * sym->sh_link);
+        if ((SHT_SYMTAB == sym->sh_type) && (SHT_STRTAB == str->sh_type)) {
+            sym_addr = (u8 *) phys_to_virt(sym->sh_addr);
+            str_addr = (u8 *) phys_to_virt(str->sh_addr);
+            sym_size = sym->sh_size;
+            str_size = str->sh_size;
+            break;
         }
     }
 

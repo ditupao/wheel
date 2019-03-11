@@ -5,6 +5,7 @@ static char        * str_addr = NULL;
 static usize  sym_size = 0;
 static usize  str_size = 0;
 
+// TODO: convert symbol table into another format
 __INIT void dbg_regist(u8 * sym_tbl, usize sym_len, u8 * str_tbl, usize str_len) {
     u32 n = ROUND_UP(ROUND_UP(sym_len, 8) + str_len, PAGE_SIZE) >> PAGE_SHIFT;
     pfn_t rng = page_range_alloc(ZONE_DMA|ZONE_NORMAL, n);

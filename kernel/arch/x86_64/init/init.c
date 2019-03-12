@@ -107,6 +107,14 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
 
+// tcb for root and idle tasks
+static __INITDATA task_t root_tcb;
+static __PERCPU   task_t idle_tcb;
+
+// forward declarations
+static void root_proc();
+static void idle_proc();
+
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // enable early debug output
     serial_dev_init();
@@ -169,6 +177,20 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     work_lib_init();
     task_lib_init();
 
+    // dummy tcb
+    task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    thiscpu_var(tid_prev) = &tcb_temp;
+    thiscpu_var(tid_next) = &tcb_temp;
+
+    // prepare tcb for root and idle-0
+    task_init(&root_tcb, 10, 0, root_proc, 0,0,0,0);
+    task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+
+    // activate two tasks, switch to root automatically
+    atomic32_inc((u32 *) &cpu_activated);
+    task_resume(thiscpu_ptr(idle_tcb)); 
+    task_resume(&root_tcb);
+
     // ASM("ud2");
     ASM("sti");
 
@@ -192,4 +214,15 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
     default:                            break;
     }
     while (1) {}
+}
+
+//------------------------------------------------------------------------------
+// post-kernel initialization
+
+static void root_proc() {
+    //
+}
+
+static void idle_proc() {
+    //
 }

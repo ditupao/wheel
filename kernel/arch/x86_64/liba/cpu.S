@@ -4,6 +4,7 @@
 .global entry_0
 .global entry_1
 .global entry_sc
+.global task_switch
 .global load_gdtr
 .global load_idtr
 .global load_tr
@@ -155,6 +156,53 @@ _no_stack_restore:
     restore_regs                        // restore all registers
     addq    $8, %rsp                    // skip error code
     iretq                               // return from exception
+
+//------------------------------------------------------------------------------
+// task support
+
+// called outside int context, switch to tid_next unconditionally
+// we have to make sure `tid_next` doesn't change during the switch
+// ABI scratch registers: rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11
+task_switch:
+    pushfq
+    cli
+    popq    %rax                    // rax = rflags (the state before cli)
+    cmpq    $0, %gs:(int_depth)
+    jne     _no_task_switch         // we're inside isr, no need to switch
+    cmpq    $0, %gs:(no_preempt)
+    jne     _no_task_switch         // if preemption is locked, return
+
+    movq    %gs:(tid_prev), %rsi    // load `tid_prev` to rsi
+    movq    %gs:(tid_next), %rdi    // load `tid_next` to rdi
+    cmpq    %rdi, %rsi
+    je      _no_task_switch         // same task, no need to switch
+
+    movq    %cs, %r8                // r8  = cs
+    popq    %r9                     // r9  = rip, restart from caller directly
+    movq    %ss,  %r10              // r10 = ss
+    movq    %rsp, %r11              // r11 = rsp
+    pushq   %r10                    // ss
+    pushq   %r11                    // rsp
+    pushq   %rax                    // rflags
+    pushq   %r8                     // cs
+    pushq   %r9                     // rip, return address
+    pushq   $0                      // error code
+    pushq   $0                      // rax
+    save_regs                       // save rest of the registers on stack
+    movq    %rsp, (%rsi)            // store the stack top into TCB
+
+    movq    %rdi, %gs:(tid_prev)    // update `tid_prev`, context already saved
+    movq    (%rdi), %rsp            // switch to new task stack
+    movq    8(%rdi), %rbx           // rsp0 value stored in tcb
+
+    restore_regs                    // restore all registers
+    addq    $8, %rsp                // skip error code
+    iretq
+
+_no_task_switch:
+    pushq   %rax
+    popfq
+    ret
 
 //------------------------------------------------------------------------------
 // helper functions, used by `cpu.c`

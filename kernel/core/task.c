@@ -97,13 +97,13 @@ static int task_cont(task_t * tid, u32 state) {
     raw_spin_take(&rdy->lock);
 
     // put task back into ready queue
-    tid->queue = &rdy->q[pri];
     rdy->priorities |= 1U << pri;
+    tid->queue = &rdy->q[pri];
     dl_push_tail(tid->queue, &tid->node);
 
     // check whether we can preempt
-    if ((rdy->priorities & (1U << pri)) == 0) {
-        rdy->priorities |= 1U << pri;
+    task_t * old = percpu_var(cpu, tid_next);
+    if (pri < old->priority) {
         percpu_var(cpu, tid_next) = tid;
     }
 
@@ -149,18 +149,38 @@ void task_init(task_t * tid, u32 priority, u32 cpu_idx, void * proc,
 void task_destroy(task_t * tid) {
     dbg_assert(NULL != tid);
     task_stop(tid, TS_DELETE);
+
+    // TODO: register work function to delete TCB
+
+    if (cpu_index() == tid->cpu_idx) {
+        task_switch();
+    } else {
+        // send ipi
+    }
 }
 
 // suspend the task execution
 void task_suspend(task_t * tid) {
     dbg_assert(NULL != tid);
     task_stop(tid, TS_SUSPEND);
+
+    if (cpu_index() == tid->cpu_idx) {
+        task_switch();
+    } else {
+        // send ipi
+    }
 }
 
 // resume the execution of a task
 void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
     task_cont(tid, TS_SUSPEND);
+
+    if (cpu_index() == tid->cpu_idx) {
+        task_switch();
+    } else {
+        // send ipi
+    }
 }
 
 //------------------------------------------------------------------------------

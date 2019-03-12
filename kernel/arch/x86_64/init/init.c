@@ -187,7 +187,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
-    atomic32_inc((u32 *) &cpu_activated);
+    atomic32_inc(&cpu_activated);
     task_resume(thiscpu_ptr(idle_tcb)); 
     task_resume(&root_tcb);
 
@@ -198,12 +198,39 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
         page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
     dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
     dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
-    dbg_assert(0);
 
+    dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
     while (1) {}
 }
 
 __INIT __NORETURN void sys_init_ap() {
+    // essential cpu features
+    cpu_init();
+    gdt_init();
+    idt_init();
+    tss_init();
+    write_gsbase(percpu_base + cpu_activated * percpu_size);
+
+    // setup local apic and timer
+    loapic_dev_init();
+
+    // dummy tcb
+    task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    thiscpu_var(tid_prev) = &tcb_temp;
+    thiscpu_var(tid_next) = &tcb_temp;
+
+    // prepare tcb for idle task
+    task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
+
+    dbg_print("cpu %d started.\r\n", cpu_activated);
+
+    // activate idle-x, and switch task manually
+    atomic32_inc((u32 *) &cpu_activated);
+    task_resume(thiscpu_ptr(idle_tcb));             // won't preempt
+    thiscpu_var(tid_next) = thiscpu_ptr(idle_tcb);
+    task_switch();
+
+    dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
     while (1) {}
 }
 
@@ -220,9 +247,32 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 // post-kernel initialization
 
 static void root_proc() {
-    //
+    dbg_print("root task running.\r\n");
+
+    // copy trampoline code
+    u8 * src = (u8 *) &_trampoline_addr;
+    u8 * dst = (u8 *) phys_to_virt(0x7c000);
+    u64  len = (u64) (&_trampoline_end - &_trampoline_addr);
+    memcpy(dst, src, len);
+
+    // start application processors one-by-one
+    while (cpu_activated < cpu_installed) {
+        u32 idx = cpu_activated;
+        loapic_emit_init(idx);       loapic_timer_busywait(10); // INIT+10ms
+        loapic_emit_sipi(idx, 0x7c); loapic_timer_busywait(1);  // SIPI+1ms
+        loapic_emit_sipi(idx, 0x7c); loapic_timer_busywait(1);  // SIPI+1ms
+        while (percpu_var(idx, tid_prev) != percpu_ptr(idx, idle_tcb)) {
+            loapic_timer_busywait(10);
+        }
+    }
+
+    dbg_print("all cpu started!\r\n");
+
+    while (1) {}
 }
 
 static void idle_proc() {
-    //
+    while (1) {
+        ASM("hlt");
+    }
 }

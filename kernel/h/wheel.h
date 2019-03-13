@@ -7,6 +7,7 @@
 #include <core/spin.h>
 #include <core/page.h>
 #include <core/work.h>
+#include <core/tick.h>
 #include <core/task.h>
 #include <core/elf64.h>
 

@@ -77,6 +77,8 @@ static loapic_t loapic_devs[MAX_CPU_COUNT];
 //------------------------------------------------------------------------------
 // local apic interrupt service routines
 
+extern void tick_advance();
+
 static void loapic_resched_proc(int vec, int_frame_t * sp __UNUSED) {
     dbg_assert(vec == VECNUM_RESCHED);
     // no need to call any function
@@ -96,7 +98,7 @@ static void loapic_svr_proc(int vec, int_frame_t * sp __UNUSED) {
 
 static void loapic_timer_proc(int vec, int_frame_t * sp __UNUSED) {
     dbg_assert(vec == VECNUM_TIMER);
-    dbg_print("!");
+    tick_advance();
     loapic_send_eoi();
 }
 
@@ -169,13 +171,17 @@ static __INIT int calibrate_freq() {
     // wait 50ms
     while (1) {
         out8(0x43, 0xe8);
-        if ((in8(0x42) & 0x80) != 0x80) { break; }
+        if ((in8(0x42) & 0x80) != 0x80) {
+            break;
+        }
     }
     while (1) {
         out8(0x43, 0x80);
         u8 lo8 = in8(0x42);
         u8 hi8 = in8(0x42);
-        if (((hi8 << 8) + lo8) <= (2 * 65535 - 119318 + 10)) { break; }
+        if (((hi8 << 8) + lo8) <= (2 * 65535 - 119318 + 10)) {
+            break;
+        }
     }
 
     // now read loapic counter again, and disable PIT channel 2

@@ -35,5 +35,6 @@
 #include "liba/ioapic.h"
 
 #include "drvs/serial.h"
+#include "drvs/console.h"
 
 #endif // ARCH_X86_64_ARCH_H

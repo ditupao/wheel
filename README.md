@@ -3,6 +3,12 @@ wheel operating system
 
 Wheel is an operating system, written mostly from scratch. Currently we support 64-bit Intel/AMD architecture.
 
+Some features of wheel:
+
+- kernel mode multi-tasking
+- fixed-priority preemptive scheduling
+- support for symmetric multiprocessing (SMP)
+
 To build and run wheel:
 
 - `make` to generate kernel image `bin/wheel.bin`.

@@ -10,7 +10,7 @@ SRCS    :=  $(foreach d,$(DIRS),$(shell find $(d) -name '*.S' -o -name '*.c'))
 OBJS    :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCS))
 DEPS    :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJS)))
 
-CFLAGS  :=  -c -g -std=c99 -Ih -Ih/arch/$(ARCH) -ffreestanding -Wall -Wextra
+CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -ffreestanding -Wall -Wextra
 CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration
 DEPGEN   =  -MT $@ -MMD -MP -MF $(basename $@).t
 LFLAGS  :=  -nostdlib -lgcc -T arch/$(ARCH)/layout.ld -Wl,-Map,$(MAPFILE)

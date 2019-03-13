@@ -191,14 +191,6 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     task_resume(thiscpu_ptr(idle_tcb)); 
     task_resume(&root_tcb);
 
-    // ASM("ud2");
-    ASM("sti");
-
-    dbg_print("page array len is %d, valid page count is %d.\r\n",
-        page_count, free_page_count(ZONE_DMA|ZONE_NORMAL));
-    dbg_print("percpu base 0x%llx, size 0x%llx.\r\n", percpu_base, percpu_size);
-    dbg_print("size of page desc is %d.\r\n", sizeof(page_t));
-
     dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
     while (1) {}
 }
@@ -222,7 +214,7 @@ __INIT __NORETURN void sys_init_ap() {
     // prepare tcb for idle task
     task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
-    dbg_print("cpu %d started.\r\n", cpu_activated);
+    dbg_print("processor %02d running.\r\n", cpu_activated);
 
     // activate idle-x, and switch task manually
     atomic32_inc((u32 *) &cpu_activated);
@@ -247,7 +239,8 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 // post-kernel initialization
 
 static void root_proc() {
-    dbg_print("root task running.\r\n");
+    console_dev_init();
+    dbg_print("processor 00 running.\r\n");
 
     // copy trampoline code
     u8 * src = (u8 *) &_trampoline_addr;

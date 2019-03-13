@@ -50,6 +50,7 @@ void dbg_print(const char * msg, ...) {
     va_end(args);
 
     serial_puts(buf);
+    console_puts(buf);
 }
 
 void dbg_trace() {

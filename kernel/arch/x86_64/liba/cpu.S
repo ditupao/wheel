@@ -5,6 +5,7 @@
 .global entry_1
 .global entry_sc
 .global task_switch
+.global enter_user
 .global load_gdtr
 .global load_idtr
 .global load_tr
@@ -17,6 +18,8 @@
 .extern exp_dispatch
 .extern int_dispatch
 .extern syscall_dispatch
+
+.extern work_dequeue
 
 //------------------------------------------------------------------------------
 // exception and interrupt entry points
@@ -117,8 +120,16 @@ exception_stub:
     movl    %eax, %edi                  // rdi = vector number
     movq    %rsp, %rsi                  // rsi = stack frame
 
+    testl   $3, 136(%rsp)               // if come from user mode
+    je      1f
+    swapgs
+1:
     call    exp_dispatch                // execute handler function
 
+    testl   $3, 136(%rsp)               // if going to user mode
+    je      2f
+    swapgs
+2:
     restore_regs                        // restore all registers
     addq    $8, %rsp                    // skip error code
     iretq                               // return from exception
@@ -129,6 +140,10 @@ interrupt_stub:
     movl    %eax, %edi                  // rdi = vector number
     movq    %rsp, %rsi                  // rsi = stack frame
 
+    testl   $3, 136(%rsp)               // if come from user mode
+    je      3f
+    swapgs
+3:
     incl    %gs:(int_depth)
     movl    %gs:(int_depth), %eax
     cmpl    $1, %eax                    // check interrupt re-entry
@@ -151,8 +166,16 @@ _no_stack_switch:
     movq    %gs:(tid_next), %rax
     movq    %rax, %gs:(tid_prev)        // update `tid_prev`
     movq    (%rax), %rsp                // switch to `tid_next->regs->rsp`
+    movq    8(%rax), %rbx               // get tcb->rsp0
+    movq    $tss, %rcx
+    movq    %rbx, %gs:4(%rax)           // store rsp0 in tss
+    call    work_dequeue                // flush work queue
 
 _no_stack_restore:
+    testl   $3, 136(%rsp)               // if going to user mode
+    je      4f
+    swapgs
+4:
     restore_regs                        // restore all registers
     addq    $8, %rsp                    // skip error code
     iretq                               // return from exception
@@ -166,43 +189,61 @@ _no_stack_restore:
 task_switch:
     pushfq
     cli
-    popq    %rax                    // rax = rflags (the state before cli)
+    popq    %rax                        // rax = rflags (the state before cli)
     cmpq    $0, %gs:(int_depth)
-    jne     _no_task_switch         // we're inside isr, no need to switch
+    jne     _no_task_switch             // we're inside isr, no need to switch
     cmpq    $0, %gs:(no_preempt)
-    jne     _no_task_switch         // if preemption is locked, return
+    jne     _no_task_switch             // if preemption is locked, return
 
-    movq    %gs:(tid_prev), %rsi    // load `tid_prev` to rsi
-    movq    %gs:(tid_next), %rdi    // load `tid_next` to rdi
+    movq    %gs:(tid_prev), %rsi        // load `tid_prev` to rsi
+    movq    %gs:(tid_next), %rdi        // load `tid_next` to rdi
     cmpq    %rdi, %rsi
-    je      _no_task_switch         // same task, no need to switch
+    je      _no_task_switch             // same task, no need to switch
 
-    movq    %cs, %r8                // r8  = cs
-    popq    %r9                     // r9  = rip, restart from caller directly
-    movq    %ss,  %r10              // r10 = ss
-    movq    %rsp, %r11              // r11 = rsp
-    pushq   %r10                    // ss
-    pushq   %r11                    // rsp
-    pushq   %rax                    // rflags
-    pushq   %r8                     // cs
-    pushq   %r9                     // rip, return address
-    pushq   $0                      // error code
-    pushq   $0                      // rax
-    save_regs                       // save rest of the registers on stack
-    movq    %rsp, (%rsi)            // store the stack top into TCB
+    movq    %cs, %r8                    // r8  = cs
+    popq    %r9                         // r9  = rip, restart from caller directly
+    movq    %ss,  %r10                  // r10 = ss
+    movq    %rsp, %r11                  // r11 = rsp
+    pushq   %r10                        // ss
+    pushq   %r11                        // rsp
+    pushq   %rax                        // rflags
+    pushq   %r8                         // cs
+    pushq   %r9                         // rip, return address
+    pushq   $0                          // error code
+    pushq   $0                          // rax
+    save_regs                           // save rest of the registers on stack
+    movq    %rsp, (%rsi)                // store the stack top into TCB
 
-    movq    %rdi, %gs:(tid_prev)    // update `tid_prev`, context already saved
-    movq    (%rdi), %rsp            // switch to new task stack
-    movq    8(%rdi), %rbx           // rsp0 value stored in tcb
+    movq    %rdi, %gs:(tid_prev)        // update `tid_prev`, context already saved
+    movq    (%rdi), %rsp                // switch to new task stack
+    movq    8(%rdi), %rbx               // rsp0 value stored in tcb
+    movq    $tss, %rcx
+    movq    %rbx, %gs:4(%rcx)           // store rsp0 in tss
+    call    work_dequeue                // flush work queue
 
-    restore_regs                    // restore all registers
-    addq    $8, %rsp                // skip error code
+    restore_regs                        // restore all registers
+    addq    $8, %rsp                    // skip error code
     iretq
 
 _no_task_switch:
     pushq   %rax
     popfq
     ret
+
+enter_user:
+    swapgs
+    movq    %rsi, %rsp  // switch to user stack
+    pushfq
+    cli
+    popq    %rax
+    subq    $8, %rsi
+    pushq   $0          // no return address
+    pushq   $0x23       // ss
+    pushq   %rsi        // rsp
+    pushq   %rax        // rflags
+    pushq   $0x1b       // cs
+    pushq   %rdi        // rip
+    iretq
 
 //------------------------------------------------------------------------------
 // helper functions, used by `cpu.c`

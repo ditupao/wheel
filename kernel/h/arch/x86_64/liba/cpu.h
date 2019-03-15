@@ -171,6 +171,7 @@ extern __INIT void int_init   ();
 // task support
 
 extern void task_switch();
+extern void enter_user (u64 ip, u64 sp);
 
 extern void regs_init(regs_t * regs, void * sp, void * proc,
                       void * a1, void * a2, void * a3, void * a4);

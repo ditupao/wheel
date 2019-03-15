@@ -288,6 +288,20 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
+void user_code() {
+    char * video = (char *) phys_to_virt(0xb8000);
+
+    video[0] = '3';
+    video[1] = 0x4e;
+
+    ASM("int $0x80");
+
+    video[2] = '4';
+    video[3] = 0x4e;
+
+    while (1) {}
+}
+
 static void root_proc() {
     console_dev_init();
     dbg_print("processor 00 running.\r\n");
@@ -315,6 +329,15 @@ static void root_proc() {
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     int ret = elf64_parse(bin_addr, bin_size);
     dbg_print("elf file parsing %s.\r\n", ret ? "ok" : "failed");
+
+#if 1
+    // jump into ring3 (code linked in higher half)
+    pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
+    u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
+
+    dbg_print("jumping to ring3 at %llx %llx.\r\n", (u64) user_code, ustack+PAGE_SIZE);
+    enter_user((u64) user_code, ustack+PAGE_SIZE);
+#endif
 
     while (1) {}
 }

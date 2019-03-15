@@ -20,12 +20,13 @@ include arch/$(ARCH)/config.mk
 build:  $(BINFILE) $(SYMFILE)
 
 clean:
-	@ $(RM) $(ELFFILE)
-	@ $(RM) $(BINFILE)
-	@ $(RM) $(MAPFILE)
-	@ $(RM) $(SYMFILE)
-	@ $(RM) $(OBJS)
-	@ $(RM) $(DEPS)
+	@ rm -rf $(ELFFILE)
+	@ rm -rf $(BINFILE)
+	@ rm -rf $(MAPFILE)
+	@ rm -rf $(SYMFILE)
+	@ rm -rf $(OBJS)
+	@ rm -rf $(RAMOBJ)
+	@ rm -rf $(DEPS)
 
 ifdef RAMFS
 RAMOBJ := $(OUTDIR)/ramfs.o

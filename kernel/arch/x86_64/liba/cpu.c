@@ -273,3 +273,7 @@ void regs_init(regs_t * regs, void * sp, void * proc,
     regs->rsp->rcx    = (u64) a3;
     regs->rsp->r8     = (u64) a4;
 }
+
+void smp_emit_resched(u32 cpu) {
+    loapic_emit_ipi(cpu, VECNUM_RESCHED);
+}

@@ -175,4 +175,6 @@ extern void task_switch();
 extern void regs_init(regs_t * regs, void * sp, void * proc,
                       void * a1, void * a2, void * a3, void * a4);
 
+extern void smp_emit_resched(u32 cpu);
+
 #endif // ARCH_X86_64_LIBA_CPU_H

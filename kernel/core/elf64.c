@@ -3,7 +3,7 @@
 // parse and load an elf file
 // we need to keep a handle of each ELF loaded
 // so that we can free all pages allocated for it.
-int elf_parse(u8 * buf, usize len) {
+int elf64_parse(u8 * buf, usize len) {
     // retrieve and verify elf header
     elf64_hdr_t * hdr = (elf64_hdr_t *) buf;
     if ((sizeof(elf64_hdr_t) > len)   ||
@@ -67,8 +67,10 @@ int elf_parse(u8 * buf, usize len) {
             dbg_print("== progbits %s.\r\n", name);
             break;
         case SHT_SYMTAB:
-        case SHT_DYNSYM:
             dbg_print("== symtab %s.\r\n", name);
+            break;
+        case SHT_DYNSYM:
+            dbg_print("== dynsym %s.\r\n", name);
             break;
         case SHT_STRTAB:
             dbg_print("== string table %s.\r\n", name);

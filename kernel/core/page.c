@@ -22,7 +22,7 @@ static zone_t zone_highmem;
 // allocate a block from zone, no spinlock protection
 
 static pfn_t zone_block_alloc(zone_t * zone, u32 order) {
-    for (u32 o = order; o < ORDER_COUNT; ++o) {
+    for (int o = order; o < ORDER_COUNT; ++o) {
         if ((NO_PAGE == zone->list[o].head) &&
             (NO_PAGE == zone->list[o].tail)) {
             // this order has no free block, try bigger ones
@@ -41,19 +41,19 @@ static pfn_t zone_block_alloc(zone_t * zone, u32 order) {
 
         // split the block, and return the second half back
         // return second half, so base address remain unchanged
-        for (o -= 1; o > order; --o) {
-            usize size = 1U << o;
+        for (; o > (int) order; --o) {
+            usize size = 1U << (o - 1);
             pfn_t bud  = blk ^ size;
             page_array[bud].block = 1;
-            page_array[bud].order = o;
+            page_array[bud].order = o - 1;
 
             // return buddy
-            pfn_t head = zone->list[o].head;
+            pfn_t head = zone->list[o - 1].head;
             page_array[bud].prev = NO_PAGE;
             page_array[bud].next = head;
-            zone->list[o].head   = bud;
+            zone->list[o - 1].head   = bud;
             if (NO_PAGE == head) {
-                zone->list[o].tail = bud;
+                zone->list[o - 1].tail = bud;
             } else {
                 page_array[head].prev = bud;
             }

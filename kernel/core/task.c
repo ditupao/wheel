@@ -155,7 +155,7 @@ void task_destroy(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        // send ipi
+        smp_emit_resched(tid->cpu_idx);
     }
 }
 
@@ -167,7 +167,7 @@ void task_suspend(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        // send ipi
+        smp_emit_resched(tid->cpu_idx);
     }
 }
 
@@ -179,7 +179,7 @@ void task_resume(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        // send ipi
+        smp_emit_resched(tid->cpu_idx);
     }
 }
 

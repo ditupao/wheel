@@ -33,6 +33,7 @@
 #include "liba/atomic.h"
 #include "liba/loapic.h"
 #include "liba/ioapic.h"
+#include "liba/mmu.h"
 
 #include "drvs/serial.h"
 #include "drvs/console.h"

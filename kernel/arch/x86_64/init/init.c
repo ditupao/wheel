@@ -102,10 +102,56 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 }
 
 //------------------------------------------------------------------------------
+// create page table for kernel context
+
+// TODO: add MMU_KERNEL mark to mapping attributes
+// we allow user access just for test purpose
+static __INIT usize ctx_create() {
+    usize virt, phys, mark;
+    usize ctx = mmu_ctx_create();
+
+    // boot, trampoline and init sections
+    virt = KERNEL_VMA;
+    phys = KERNEL_LMA;
+    mark = ROUND_UP(&_init_end, PAGE_SIZE);
+    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
+
+    // kernel code section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&_text_end, PAGE_SIZE);
+    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
+
+    // kernel read only data section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
+    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
+
+    // kernel data section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
+    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
+
+    // map all physical memory to higher half
+    // TODO: only map present pages, and add IO/Local APIC in driver
+    mmu_map(ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
+
+    // map all physical memory to lower half (identity mapping)
+    mmu_map(ctx, 0, 0, 1U << 20, 0);
+
+    return ctx;
+}
+
+//------------------------------------------------------------------------------
 // pre-kernel initialization routines
 
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
+
+// kernel page table
+static __INITDATA usize  kernel_ctx;
 
 // tcb for root and idle tasks
 static __INITDATA task_t root_tcb;
@@ -173,8 +219,12 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     ioapic_init_all();
     loapic_dev_init();
 
+    kernel_ctx = ctx_create();
+    // mmu_ctx_set(kernel_ctx);
+
     // init core kernel facilities
     work_lib_init();
+    tick_lib_init();
     task_lib_init();
 
     // dummy tcb
@@ -260,6 +310,11 @@ static void root_proc() {
     }
 
     dbg_print("all cpu started!\r\n");
+
+    u8  * bin_addr = &_ramfs_addr;
+    usize bin_size = (usize) (&_init_end - &_ramfs_addr);
+    int ret = elf64_parse(bin_addr, bin_size);
+    dbg_print("elf file parsing %s.\r\n", ret ? "ok" : "failed");
 
     while (1) {}
 }

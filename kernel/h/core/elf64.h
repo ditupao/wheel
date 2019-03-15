@@ -121,4 +121,9 @@ typedef struct elf64_sym {
 #define STT_SECTION         3
 #define STT_FILE            4
 
+//------------------------------------------------------------------------------
+// public function
+
+extern int elf64_parse(u8 * buf, usize len);
+
 #endif // CORE_ELF64_H

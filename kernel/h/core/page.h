@@ -27,7 +27,8 @@ typedef struct page {
 #define PT_FREE         1       // not allocated
 #define PT_CACHED       2       // percpu cache
 #define PT_KERNEL       3       // generic kernel usage
-#define PT_KSTACK       4       // task's kernel stack page
+#define PT_POOL         4       // memory pool
+#define PT_KSTACK       5       // task's kernel stack page
 
 // block order
 #define ORDER_COUNT     16

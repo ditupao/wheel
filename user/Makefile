@@ -5,7 +5,7 @@ OBJS    :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCS))
 CFLAGS  :=  -c -g -std=c99 -Ih -ffreestanding -fPIC -Wall -Wextra
 CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration
 
-LFLAGS  :=  -nostdlib -fPIC -lgcc
+LFLAGS  :=  -nostdlib -lgcc -Ttext=0x100000
 
 build: $(OUTDIR)/setup.app
 

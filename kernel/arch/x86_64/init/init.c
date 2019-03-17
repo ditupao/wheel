@@ -220,7 +220,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     loapic_dev_init();
 
     kernel_ctx = ctx_create();
-    // mmu_ctx_set(kernel_ctx);
+    mmu_ctx_set(kernel_ctx);
 
     // init core kernel facilities
     work_lib_init();
@@ -288,19 +288,19 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
-void user_code() {
-    char * video = (char *) phys_to_virt(0xb8000);
+// void user_code() {
+//     char * video = (char *) phys_to_virt(0xb8000);
 
-    video[0] = '3';
-    video[1] = 0x4e;
+//     video[0] = '3';
+//     video[1] = 0x4e;
 
-    ASM("int $0x80");
+//     ASM("int $0x80");
 
-    video[2] = '4';
-    video[3] = 0x4e;
+//     video[2] = '4';
+//     video[3] = 0x4e;
 
-    while (1) {}
-}
+//     while (1) {}
+// }
 
 static void root_proc() {
     console_dev_init();
@@ -327,10 +327,18 @@ static void root_proc() {
 
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
-    int ret = elf64_parse(bin_addr, bin_size);
-    dbg_print("elf file parsing %s.\r\n", ret ? "ok" : "failed");
+    usize entry = elf64_parse(bin_addr, bin_size);
+    // dbg_print("elf file parsing %s.\r\n", (OK == ret) ? "ok" : "failed");
+    if (0 != entry) {
+        // allocate stack space for user-mode stack
+        pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
+        u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
+        enter_user(entry, ustack + PAGE_SIZE);
+    } else {
+        dbg_print("elf file parsing error, cannot execute!\r\n");
+    }
 
-#if 1
+#if 0
     // jump into ring3 (code linked in higher half)
     pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
     u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);

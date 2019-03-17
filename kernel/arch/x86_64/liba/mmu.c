@@ -154,6 +154,7 @@ usize mmu_translate(usize ctx, usize va) {
 void mmu_map(usize ctx, usize va, usize pa, usize n, u32 attr) {
     u64 v = (u64) va;
     u64 p = (u64) pa;
+    // dbg_print(">>> mapping 0x%llx to 0x%llx.\r\n", va, pa);
     dbg_assert(IS_ALIGNED(v, PAGE_SIZE));
     dbg_assert(IS_ALIGNED(p, PAGE_SIZE));
 

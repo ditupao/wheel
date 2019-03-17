@@ -1,9 +1,80 @@
 #include <wheel.h>
 
+// find the smallest power of 2 larger than or equal to x
+static inline u32 pow2(u32 x) {
+    --x;
+    x |= x >>  1;
+    x |= x >>  2;
+    x |= x >>  4;
+    x |= x >>  8;
+    x |= x >> 16;
+    return x + 1;
+}
+
+typedef struct elf64_dyn {
+    i64 d_tag;
+    union {
+        u64 d_val;
+        u64 d_ptr;
+    } d_un;
+} elf64_dyn_t;
+
+#define DT_NULL     0
+#define DT_NEEDED   1
+#define DT_PLTRELSZ 2
+#define DT_PLTGOT   3
+#define DT_HASH     4
+#define DT_STRTAB   5
+#define DT_SYMTAB   6
+#define DT_RELA     7
+#define DT_RELASZ   8
+#define DT_RELAENT  9
+#define DT_STRSZ    10
+#define DT_SYMENT   11
+#define DT_INIT     12
+#define DT_FINI     13
+#define DT_SONAME   14
+#define DT_RPATH    15
+#define DT_SYMBOLIC 16
+#define DT_REL      17
+#define DT_RELSZ    18
+#define DT_RELENT   19
+#define DT_PLTREL   20
+#define DT_DEBUG    21
+#define DT_TEXTREL  22
+#define DT_JMPREL   23
+#define DT_ENCODING 32
+
+// 只有PT_LOAD类型的segment才是需要加载到内存的，其他类型的segment只是提供额外信息
+// 因此PT_LOAD相互之间不能重叠。
+// filesz和memsz可以不同，剩余的空间使用0填充
+void elf64_load_segment(u8 * data, elf64_phdr_t * seg) {
+    usize vm_start   = ROUND_DOWN(seg->p_vaddr, PAGE_SIZE);
+    usize vm_end     = seg->p_vaddr + seg->p_memsz;
+    int   page_count = ROUND_UP(vm_end - vm_start, PAGE_SIZE) >> PAGE_SHIFT;
+
+    // segment pages are organized in single linked list
+    pfn_t seg_head = NO_PAGE;
+    for (int i = 0; i < page_count; ++i) {
+        pfn_t p = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
+        if (NO_PAGE == p) {
+            dbg_print("memory not enough!\r\n");
+            return;
+        }
+        page_array[p].type = PT_KERNEL;
+        page_array[p].next = seg_head;
+        seg_head = p;
+        mmu_map(mmu_ctx_get(), vm_start + i * PAGE_SIZE, (usize) p << PAGE_SHIFT, 1, 0);
+    }
+
+    memcpy((u8 *) seg->p_vaddr, data, seg->p_filesz);
+    memset((u8 *) seg->p_vaddr + seg->p_filesz, 0, seg->p_memsz - seg->p_filesz);
+}
+
 // parse and load an elf file
 // we need to keep a handle of each ELF loaded
 // so that we can free all pages allocated for it.
-int elf64_parse(u8 * buf, usize len) {
+usize elf64_parse(u8 * buf, usize len) {
     // retrieve and verify elf header
     elf64_hdr_t * hdr = (elf64_hdr_t *) buf;
     if ((sizeof(elf64_hdr_t) > len)   ||
@@ -17,8 +88,10 @@ int elf64_parse(u8 * buf, usize len) {
         (hdr->e_machine  != EM_AMD64) ||        // x86_64
 #endif
         ((hdr->e_type != ET_REL) && (hdr->e_type != ET_DYN))) {
-        return ERROR;
+        return 0;
     }
+
+    dbg_print("file type is %d, entry point 0x%x.\r\n", hdr->e_type, hdr->e_entry);
 
     // get program header table's offset, must present
     if ((hdr->e_phoff     == 0) ||
@@ -26,23 +99,60 @@ int elf64_parse(u8 * buf, usize len) {
         (hdr->e_phentsize == 0) ||
         (hdr->e_phoff >= len)   ||
         (hdr->e_phoff + hdr->e_phentsize * hdr->e_phnum >= len)) {
-        return ERROR;
+        return 0;
     }
 
     // TODO: at least one PT_LOAD segment. exit if not found
+    // PT_LOAD segments cannot overlap
     for (int i = 0; i < hdr->e_phnum; ++i) {
         elf64_phdr_t * phdr = (elf64_phdr_t *) (buf + hdr->e_phoff + i * hdr->e_phentsize);
-        switch (phdr->p_type) {
-        case PT_LOAD:
-            dbg_print("-- LOAD to 0x%llx, size 0x%x, attr %u.\r\n", phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
-            break;
-        case PT_DYNAMIC:
-            dbg_print("-- DYNAMIC to 0x%llx, size 0x%x, attr %u.\r\n", phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
-            break;
-        default:
-            break;
+        if (PT_LOAD != phdr->p_type) {
+            continue;
         }
+        dbg_print("-- LOAD to 0x%llx, size 0x%x, attr %u.\r\n", phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
+        elf64_load_segment(buf + phdr->p_offset, phdr);
     }
+
+    // // loop through the segment table again, this time find all dynamic segments
+    // // and perform dynamic linking
+    // for (int i = 0; i < hdr->e_phnum; ++i) {
+    //     elf64_phdr_t * phdr = (elf64_phdr_t *) (buf + hdr->e_phoff + i * hdr->e_phentsize);
+    //     if (PT_DYNAMIC != phdr->p_type) {
+    //         continue;
+    //     }
+    //     dbg_print("-- DYNAMIC to 0x%llx, size 0x%x.\r\n", phdr->p_vaddr, phdr->p_memsz);
+
+    //     elf64_dyn_t * dyn_entries = (elf64_dyn_t *) (buf + phdr->p_offset);
+    //     usize         dyn_count   = phdr->p_filesz / sizeof(elf64_dyn_t);
+    //     dbg_print("item total length = %d.\r\n", phdr->p_filesz);
+    //     for (int j = 0; j < dyn_count; ++j) {
+    //         switch (dyn_entries[j].d_tag) {
+    //         case DT_REL:
+    //             dbg_print("   --> REL.\r\n");
+    //             break;
+    //         case DT_RELENT:
+    //             dbg_print("   --> RELENT.\r\n");
+    //             break;
+    //         case DT_RELSZ:
+    //             dbg_print("   --> RELSZ.\r\n");
+    //             break;
+    //         case DT_RELA:
+    //             dbg_print("   --> RELA.\r\n");
+    //             break;
+    //         case DT_RELAENT:
+    //             dbg_print("   --> RELAENT.\r\n");
+    //             break;
+    //         case DT_RELASZ:
+    //             dbg_print("   --> RELASZ.\r\n");
+    //             break;
+    //         default:
+    //             dbg_print("   --> unknown dyn type %x.\r\n", dyn_entries[j].d_tag);
+    //             break;
+    //         }
+    //     }
+    // }
+
+    return hdr->e_entry;
 
     // get section header table's offset
     if ((hdr->e_shoff     == 0) ||

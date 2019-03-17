@@ -35,7 +35,7 @@ SECTIONS {
         *(.init.text)
         *(.init.data)
         _ramfs_addr = .;
-        *(.ramfs)
+        *(.binary)
         _init_end = .;
     } :init =0x90
 

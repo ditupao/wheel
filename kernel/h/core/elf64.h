@@ -124,6 +124,6 @@ typedef struct elf64_sym {
 //------------------------------------------------------------------------------
 // public function
 
-extern int elf64_parse(u8 * buf, usize len);
+extern usize elf64_parse(u8 * buf, usize len);
 
 #endif // CORE_ELF64_H

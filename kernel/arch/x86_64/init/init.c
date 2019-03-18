@@ -325,6 +325,12 @@ static void root_proc() {
 
     dbg_print("all cpu started!\r\n");
 
+    vmspace_t vm;
+    vmspace_lib_init();
+
+    vmspace_init(&vm);
+    vmspace_add(&vm, 0x100000, 0x1000000);
+
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     usize entry = elf64_parse(bin_addr, bin_size);
@@ -337,15 +343,6 @@ static void root_proc() {
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }
-
-#if 0
-    // jump into ring3 (code linked in higher half)
-    pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
-    u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
-
-    dbg_print("jumping to ring3 at %llx %llx.\r\n", (u64) user_code, ustack+PAGE_SIZE);
-    enter_user((u64) user_code, ustack+PAGE_SIZE);
-#endif
 
     while (1) {}
 }

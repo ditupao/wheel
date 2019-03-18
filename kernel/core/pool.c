@@ -8,7 +8,7 @@ void pool_init(pool_t * pool, u32 obj_size) {
     }
 
     if (obj_size > (PAGE_SIZE / 8)) {
-        dbg_print("pool obj-size too large!\n");
+        dbg_print("pool obj-size too large!\r\n");
         return;
     }
 
@@ -170,34 +170,52 @@ void pool_obj_free(pool_t * pool, void * obj) {
         // slab state change from empty to partial
         pfn_t prev = page_array[slab].prev;
         pfn_t next = page_array[slab].next;
-        if (NO_PAGE == prev) { pool->empty.head = next; }
-        else                 { page_array[prev].next  = next; }
-        if (NO_PAGE == next) { pool->empty.tail = prev; }
-        else                 { page_array[next].prev  = prev; }
+        if (NO_PAGE == prev) {
+            pool->empty.head = next;
+        } else {
+            page_array[prev].next = next;
+        }
+        if (NO_PAGE == next) {
+            pool->empty.tail = prev;
+        } else {
+            page_array[next].prev = prev;
+        }
 
         // push to the tail of partial slabs
         pfn_t tail = pool->partial.tail;
         page_array[slab].prev = tail;
         page_array[slab].next = NO_PAGE;
         pool->partial.tail = slab;
-        if (NO_PAGE == tail) { pool->partial.head = slab; }
-        else                 { page_array[tail].next    = slab; }
+        if (NO_PAGE == tail) {
+            pool->partial.head = slab;
+        } else {
+            page_array[tail].next = slab;
+        }
     } else if (page_array[slab].inuse == 0) {
         // slab turn from partial to full
         pfn_t prev = page_array[slab].prev;
         pfn_t next = page_array[slab].next;
-        if (NO_PAGE == prev) { pool->partial.head = next; }
-        else                 { page_array[prev].next    = next; }
-        if (NO_PAGE == next) { pool->partial.tail = prev; }
-        else                 { page_array[next].prev    = prev; }
+        if (NO_PAGE == prev) {
+            pool->partial.head = next;
+        } else {
+            page_array[prev].next = next;
+        }
+        if (NO_PAGE == next) {
+            pool->partial.tail = prev;
+        } else {
+            page_array[next].prev = prev;
+        }
 
         // insert into full slabs, order does not matter
         pfn_t head = pool->full.head;
         page_array[slab].prev = NO_PAGE;
         page_array[slab].next = head;
         pool->full.head = slab;
-        if (NO_PAGE == head) { pool->full.tail = slab; }
-        else                 { page_array[head].prev = slab; }
+        if (NO_PAGE == head) {
+            pool->full.tail = slab;
+        } else {
+            page_array[head].prev = slab;
+        }
     } else {
         // slab state didn't change, but `inuse` became smaller, so we may
         // have to move slab forward.
@@ -217,8 +235,11 @@ void pool_obj_free(pool_t * pool, void * obj) {
             pfn_t n = page_array[slab].next;
             dbg_assert(NO_PAGE != p);
             page_array[p].next = n;
-            if (NO_PAGE == n) { pool->partial.tail = p; }
-            else              { page_array[n].prev       = p; }
+            if (NO_PAGE == n) {
+                pool->partial.tail = p;
+            } else {
+                page_array[n].prev = p;
+            }
 
             // then insert `slab` after `prev`
             if (NO_PAGE == prev) {

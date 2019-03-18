@@ -147,15 +147,16 @@ static inline zone_t * zone_for(usize start, usize end) {
 #pragma GCC diagnostic pop
 
 // allocate page block of size 2^order
+// lock zone and interrupt, so ISR could alloc pages
 pfn_t page_block_alloc(u32 zones, u32 order) {
     if (order >= ORDER_COUNT) {
         return NO_PAGE; // invalid parameter
     }
 
     if (zones & ZONE_HIGHMEM) {
-        raw_spin_take(&zone_highmem.lock);
+        u32 key = irq_spin_take(&zone_highmem.lock);
         pfn_t blk = zone_block_alloc(&zone_highmem, order);
-        raw_spin_give(&zone_highmem.lock);
+        irq_spin_give(&zone_highmem.lock, key);
         dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;
@@ -163,9 +164,9 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
     }
 
     if (zones & ZONE_NORMAL) {
-        raw_spin_take(&zone_normal.lock);
+        u32 key = irq_spin_take(&zone_normal.lock);
         pfn_t blk = zone_block_alloc(&zone_normal, order);
-        raw_spin_give(&zone_normal.lock);
+        irq_spin_give(&zone_normal.lock, key);
         dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;
@@ -173,9 +174,9 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
     }
 
     if (zones & ZONE_DMA) {
-        raw_spin_take(&zone_dma.lock);
+        u32 key = irq_spin_take(&zone_dma.lock);
         pfn_t blk = zone_block_alloc(&zone_dma, order);
-        raw_spin_give(&zone_dma.lock);
+        irq_spin_give(&zone_dma.lock, key);
         dbg_assert((blk & ((1U << order) - 1)) == 0);
         if (NO_PAGE != blk) {
             return blk;

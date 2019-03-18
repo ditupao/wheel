@@ -111,10 +111,10 @@ void * pool_obj_alloc(pool_t * pool) {
         }
 
         // push this page into the partial list
-        page_array[slab].prev    = NO_PAGE;
-        page_array[slab].next    = NO_PAGE;
-        pool->partial.head = NO_PAGE;
-        pool->partial.tail = NO_PAGE;
+        page_array[slab].prev = NO_PAGE;
+        page_array[slab].next = NO_PAGE;
+        pool->partial.head    = slab;
+        pool->partial.tail    = slab;
     }
 
     // get the tail of partial list, but not remove from the list

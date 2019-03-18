@@ -12,9 +12,9 @@ typedef struct slab_list {
 typedef struct pool {
     spin_t      lock;
     u32         obj_size;
-    slab_list_t full;
-    slab_list_t partial;
-    slab_list_t empty;
+    slab_list_t full;       // all objects not allocated
+    slab_list_t partial;    // some objects allocated
+    slab_list_t empty;      // all objects allocated
 } pool_t;
 
 extern void pool_init   (pool_t * pool, u32 obj_size);

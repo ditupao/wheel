@@ -21,7 +21,12 @@ struct rbtree {
 
 extern void rb_link_node(rbnode_t * node, rbnode_t * parent, rbnode_t ** rb_link);
 extern void rb_insert_fixup(rbnode_t * node, rbtree_t * tree);
-
 extern void rb_erase(rbnode_t * node, rbtree_t * tree);
+extern void rb_replace(rbnode_t * victim, rbnode_t * node, rbtree_t * tree);
+
+extern rbnode_t * rb_first(rbtree_t * tree);
+extern rbnode_t * rb_last (rbtree_t * tree);
+extern rbnode_t * rb_next (rbnode_t * node);
+extern rbnode_t * rb_prev (rbnode_t * node);
 
 #endif // LIBK_RBTREE_H

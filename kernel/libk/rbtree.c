@@ -1,5 +1,8 @@
 #include <wheel.h>
 
+// for root nodes, parent == NULL
+// we don't have standalone node as Linux does
+
 #define RB_RED      0
 #define RB_BLACK    1
 
@@ -32,9 +35,13 @@ static void rb_rotate_left(rbnode_t * node, rbtree_t * tree) {
     right->left = node;                         // Y->left   = X
     rb_set_parent(right, parent);               // Y->parent = P
 
-    if      (NULL == parent)       { tree->root    = right; }
-    else if (node == parent->left) { parent->left  = right; }
-    else                           { parent->right = right; }
+    if (NULL == parent) {
+        tree->root = right;
+    } else if (node == parent->left) {
+        parent->left = right;
+    } else {
+        parent->right = right;
+    }
     rb_set_parent(node, right);
 }
 
@@ -48,9 +55,13 @@ static void rb_rotate_right(rbnode_t * node, rbtree_t * tree) {
     left->right = node;                         // X->right  = Y
     rb_set_parent(left, parent);                // X->parent = P
 
-    if      (NULL == parent)       { tree->root    = left; }
-    else if (node == parent->left) { parent->left  = left; }
-    else                           { parent->right = left; }
+    if (NULL == parent) {
+        tree->root = left;
+    } else if (node == parent->left) {
+        parent->left = left;
+    } else {
+        parent->right = left;
+    }
     rb_set_parent(node, left);
 }
 
@@ -167,7 +178,9 @@ static void rb_erase_fixup(rbnode_t * node, rbnode_t * parent, rbtree_t * tree) 
             }
         }
     }
-    if (NULL != node) { rb_set_color(node, RB_BLACK); }
+    if (NULL != node) {
+        rb_set_color(node, RB_BLACK);
+    }
 }
 
 void rb_erase(rbnode_t * node, rbtree_t * tree) {
@@ -184,12 +197,17 @@ void rb_erase(rbnode_t * node, rbtree_t * tree) {
         rbnode_t * left;
 
         node = node->right;
-        while (NULL != (left = node->left)) { node = left; }
+        while (NULL != (left = node->left)) {
+            node = left;
+        }
 
         parent = RB_PARENT(old);
         if (NULL != parent) {
-            if (parent->left == old) { parent->left  = node; }
-            else                     { parent->right = node; }
+            if (parent->left == old) {
+                parent->left  = node;
+            } else {
+                parent->right = node;
+            }
         } else {
             tree->root = node;
         }
@@ -201,7 +219,9 @@ void rb_erase(rbnode_t * node, rbtree_t * tree) {
         if (parent == old) {
             parent = node;
         } else {
-            if (child) { rb_set_parent(child, parent); }
+            if (child) {
+                rb_set_parent(child, parent);
+            }
             parent->left = child;
             node->right = old->right;
             rb_set_parent(old->right, node);
@@ -216,14 +236,102 @@ void rb_erase(rbnode_t * node, rbtree_t * tree) {
     parent = RB_PARENT(node);
     color  = RB_COLOR(node);
 
-    if (child) { rb_set_parent(child, parent); }
+    if (child) {
+        rb_set_parent(child, parent);
+    }
     if (parent) {
-        if (parent->left == node) { parent->left  = child; }
-        else                      { parent->right = child; }
+        if (parent->left == node) {
+            parent->left  = child;
+        } else {
+            parent->right = child;
+        }
     } else {
         tree->root = child;
     }
 
 color:
-    if (RB_BLACK == color) { rb_erase_fixup(child, parent, tree); }
+    if (RB_BLACK == color) {
+        rb_erase_fixup(child, parent, tree);
+    }
+}
+
+void rb_replace(rbnode_t * victim, rbnode_t * node, rbtree_t * tree) {
+    // modify parent node
+    rbnode_t * parent = RB_PARENT(victim);
+    if (NULL == parent) {
+        tree->root = node;
+    } else if (victim == parent->left) {
+        parent->left = node;
+    } else {
+        parent->right = node;
+    }
+
+    // link child nodes to new parent
+    if (victim->left) {
+        rb_set_parent(victim->left, node);
+    }
+    if (victim->right) {
+        rb_set_parent(victim->right, node);
+    }
+
+    // copy parent/color and children pointers
+    *node = *victim;
+}
+
+rbnode_t * rb_first(rbtree_t * tree) {
+    rbnode_t * node = tree->root;
+    if (NULL == node) {
+        return NULL;
+    }
+    while (node->left) {
+        node = node->left;
+    }
+    return node;
+}
+
+rbnode_t * rb_last(rbtree_t * tree) {
+    rbnode_t * node = tree->root;
+    if (NULL == node) {
+        return NULL;
+    }
+    while (node->right) {
+        node = node->right;
+    }
+    return node;
+}
+
+rbnode_t * rb_next(rbnode_t * node) {
+    // if we have a right child, go down and then left as far as we can
+    if (node->right) {
+        node = node->right; 
+        while (node->left) {
+            node = node->left;
+        }
+        return node;
+    }
+
+    // no right child, go up through its parent
+    rbnode_t * parent;
+    while ((parent = RB_PARENT(node)) && (node == parent->right)) {
+        node = parent;
+    }
+    return parent;
+}
+
+rbnode_t * rb_prev(rbnode_t * node) {
+    // if we have a left child, go down and then right as far as we can
+    if (node->left) {
+        node = node->left;
+        while (node->right) {
+            node = node->right;
+        }
+        return node;
+    }
+
+    // no left child, go up till we find an ancester which is a right child
+    rbnode_t * parent;
+    while ((parent = RB_PARENT(node)) && (node == parent->left)) {
+        node = parent;
+    }
+    return parent;
 }

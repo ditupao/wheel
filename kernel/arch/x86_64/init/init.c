@@ -325,12 +325,6 @@ static void root_proc() {
 
     dbg_print("all cpu started!\r\n");
 
-    vmspace_t vm;
-    vmspace_lib_init();
-
-    vmspace_init(&vm);
-    vmspace_add(&vm, 0x100000, 0x1000000);
-
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     usize entry = elf64_parse(bin_addr, bin_size);

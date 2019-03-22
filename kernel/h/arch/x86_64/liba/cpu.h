@@ -14,7 +14,8 @@ typedef struct int_frame {
 
 typedef struct regs {
     int_frame_t * rsp;      // current int stack frame
-    u64           rsp0;     // value saved in tss->rsp0
+    usize         rsp0;     // value saved in tss->rsp0
+    usize         pgtbl;    // current page table
 } __PACKED __ALIGNED(16) regs_t;
 
 typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);

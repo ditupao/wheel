@@ -6,6 +6,14 @@ void vmspace_init(vmspace_t * space) {
     space->ranges = DLLIST_INIT;
 }
 
+void vmspace_destroy(vmspace_t * space) {
+    dlnode_t * dl;
+    while (NULL != (dl = dl_pop_head(&space->ranges))) {
+        vmrange_t * range = PARENT(dl, vmrange_t, dl);
+        pool_obj_free(&range_pool, range);
+    }
+}
+
 // add a new region into the virtual memory space, and mark as free
 int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);

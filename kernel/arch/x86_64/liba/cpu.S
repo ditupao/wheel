@@ -164,11 +164,12 @@ _no_stack_switch:
     jne     _no_stack_restore
 
     movq    %gs:(tid_next), %rax
-    movq    %rax, %gs:(tid_prev)        // update `tid_prev`
     movq    (%rax), %rsp                // switch to `tid_next->regs->rsp`
-    movq    8(%rax), %rbx               // get tcb->rsp0
-    movq    $tss, %rcx
-    movq    %rbx, %gs:4(%rax)           // store rsp0 in tss
+    movq    0x08(%rax), %rbx            // get tcb->rsp0
+    //movq    0x10(%rax), %rcx            // get tcb->pgtbl
+    movq    %rax, %gs:(tid_prev)        // update `tid_prev`
+    movq    $tss, %rdx
+    movq    %rbx, %gs:4(%rdx)           // store rsp0 in tss (maybe unaligned?)
     call    work_dequeue                // flush work queue
 
 _no_stack_restore:
@@ -214,11 +215,13 @@ task_switch:
     save_regs                           // save rest of the registers on stack
     movq    %rsp, (%rsi)                // store the stack top into TCB
 
-    movq    %rdi, %gs:(tid_prev)        // update `tid_prev`, context already saved
     movq    (%rdi), %rsp                // switch to new task stack
-    movq    8(%rdi), %rbx               // rsp0 value stored in tcb
-    movq    $tss, %rcx
-    movq    %rbx, %gs:4(%rcx)           // store rsp0 in tss
+    movq    0x08(%rdi), %rbx            // get tcb->rsp0
+    movq    0x10(%rdi), %rcx            // get tcb->pgtbl
+    movq    %rdi, %gs:(tid_prev)        // update `tid_prev`, context already saved
+    movq    $tss, %rdx
+    movq    %rbx, %gs:4(%rdx)           // store rsp0 in tss
+    //movq    %cr3, 
     call    work_dequeue                // flush work queue
 
     restore_regs                        // restore all registers

@@ -4,7 +4,7 @@
 #include <base.h>
 
 // `addr` and `size` must be page-aligned, we can
-// use lower bits as range type
+// use lower bits to store range type
 
 typedef struct vmspace {
     dllist_t ranges;

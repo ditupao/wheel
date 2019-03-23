@@ -14,8 +14,8 @@ typedef struct int_frame {
 
 typedef struct regs {
     int_frame_t * rsp;      // current int stack frame
-    usize         rsp0;     // value saved in tss->rsp0
-    usize         pgtbl;    // current page table
+    u64           rsp0;     // value saved in tss->rsp0
+    u64           cr3;      // current page table
 } __PACKED __ALIGNED(16) regs_t;
 
 typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);
@@ -158,10 +158,10 @@ static inline void * calc_thiscpu_addr(void * ptr) {
 //------------------------------------------------------------------------------
 // essential cpu features
 
-extern __INIT void cpu_init();
-extern __INIT void gdt_init();
-extern __INIT void idt_init();
-extern __INIT void tss_init();
+extern __INIT void cpu_init   ();
+extern __INIT void gdt_init   ();
+extern __INIT void idt_init   ();
+extern __INIT void tss_init   ();
 static inline void int_disable() { ASM("cli"); }
 static inline void int_enable () { ASM("sti"); }
 extern        u32  int_lock   ();
@@ -171,12 +171,14 @@ extern __INIT void int_init   ();
 //------------------------------------------------------------------------------
 // task support
 
-extern void task_switch();
-extern void enter_user (u64 ip, u64 sp);
-
-extern void regs_init(regs_t * regs, void * sp, void * proc,
-                      void * a1, void * a2, void * a3, void * a4);
-
-extern void smp_emit_resched(u32 cpu);
+extern void  task_switch    ();
+extern void  enter_user     (u64 ip, u64 sp);
+extern void  regs_init      (regs_t * regs, void * sp, void * proc,
+                             void * a1, void * a2, void * a3, void * a4);
+extern void  regs_pgtbl_set (regs_t * regs, usize tbl);
+extern usize regs_pgtbl_get (regs_t * regs);
+extern void  regs_retval_set(regs_t * regs, usize val);
+extern usize regs_retval_get(regs_t * regs);
+extern void  smp_reschedule (u32 cpu);
 
 #endif // ARCH_X86_64_LIBA_CPU_H

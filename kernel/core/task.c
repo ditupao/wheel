@@ -30,7 +30,7 @@ __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * 
 // add bits to `tid->state`, possibly stopping the task.
 // return ERROR if already stopped.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
-// caller should call `task_switch` or `smp_emit_resched` manually.
+// caller should call `task_switch` or `smp_reschedule` manually.
 static int task_stop(task_t * tid, u32 state) {
     // lock cpu interrupt and target task
     u32 key = int_lock();
@@ -75,7 +75,7 @@ static int task_stop(task_t * tid, u32 state) {
 // remove bits from `tid->state`, possibly resuming the task.
 // return ERROR if already running.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
-// caller should call `task_switch` or `smp_emit_resched` manually.
+// caller should call `task_switch` or `smp_reschedule` manually.
 static int task_cont(task_t * tid, u32 state) {
     // lock cpu interrupt and target task
     u32 key = int_lock();
@@ -155,7 +155,7 @@ void task_destroy(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        smp_emit_resched(tid->cpu_idx);
+        smp_reschedule(tid->cpu_idx);
     }
 }
 
@@ -167,7 +167,7 @@ void task_suspend(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        smp_emit_resched(tid->cpu_idx);
+        smp_reschedule(tid->cpu_idx);
     }
 }
 
@@ -179,7 +179,7 @@ void task_resume(task_t * tid) {
     if (cpu_index() == tid->cpu_idx) {
         task_switch();
     } else {
-        smp_emit_resched(tid->cpu_idx);
+        smp_reschedule(tid->cpu_idx);
     }
 }
 

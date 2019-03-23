@@ -241,11 +241,6 @@ void int_dispatch(int vec, int_frame_t * f) {
     }
 }
 
-void syscall_dispatch() {
-    dbg_print("handling system call.\r\n");
-    // while (1) {}
-}
-
 //------------------------------------------------------------------------------
 // task support
 
@@ -259,8 +254,9 @@ void regs_init(regs_t * regs, void * sp, void * proc,
 
     memset(regs, 0, sizeof(regs_t));
     sp = (void *) ((u64) sp & ~7);
-    regs->rsp    = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
-    regs->rsp0   = (u64) sp;
+    regs->rsp  = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
+    regs->rsp0 = (u64) sp;
+    regs->cr3  = read_cr3();
 
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment
@@ -274,6 +270,22 @@ void regs_init(regs_t * regs, void * sp, void * proc,
     regs->rsp->r8     = (u64) a4;
 }
 
-void smp_emit_resched(u32 cpu) {
+void regs_pgtbl_set(regs_t * regs, usize tbl) {
+    regs->cr3 = (u64) tbl;
+}
+
+usize regs_pgtbl_get(regs_t * regs) {
+    return regs->cr3;
+}
+
+void regs_retval_set(regs_t * regs, usize val) {
+    regs->rsp->rax = (u64) val;
+}
+
+usize regs_retval_get(regs_t * regs) {
+    return (usize) regs->rsp->rax;
+}
+
+void smp_reschedule(u32 cpu) {
     loapic_emit_ipi(cpu, VECNUM_RESCHED);
 }

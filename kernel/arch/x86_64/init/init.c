@@ -235,6 +235,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // prepare tcb for root and idle-0
     task_init(&root_tcb, 10, 0, root_proc, 0,0,0,0);
     task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+    // root_tcb.regs.cr3 = kernel_ctx;
+    // thiscpu_ptr(idle_tcb)->regs.cr3 = kernel_ctx;
 
     // activate two tasks, switch to root automatically
     atomic32_inc(&cpu_activated);
@@ -263,6 +265,7 @@ __INIT __NORETURN void sys_init_ap() {
 
     // prepare tcb for idle task
     task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
+    // thiscpu_ptr(idle_tcb)->regs.cr3 = kernel_ctx;
 
     dbg_print("processor %02d running.\r\n", cpu_activated);
 

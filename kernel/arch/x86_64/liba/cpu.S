@@ -15,9 +15,9 @@
 .extern tid_prev
 .extern tid_next
 
-.extern exp_dispatch
-.extern int_dispatch
-.extern syscall_dispatch
+.extern exp_dispatch            // in `liba/cpu.c`
+.extern int_dispatch            // in `liba/cpu.c`
+.extern syscall_dispatch        // in `core/syscall.c`
 
 .extern work_dequeue
 
@@ -79,6 +79,8 @@ vec = 2
 .rept 256-2
 .balign 16
 
+// generate ISR entry for every interrupt/exception
+// but not for system call
 .if ((10 <= vec) && (vec <= 14)) || (vec == 17)
     // exception with error code
     pushq   %rax
@@ -104,14 +106,13 @@ vec = vec + 1
 .endr
 
 // the entry for system call (int 0x80) is different
+// syscall works like normal C function, no need to save regs
 entry_sc:
-    // system call always come from user mode
-    // so we don't have to check CS
-    swapgs
+    swapgs                              // always come from ring3
     sti
     call    syscall_dispatch
     cli
-    swapgs
+    swapgs                              // always return to ring3
     iretq
 
 // common code for exception handling
@@ -161,22 +162,27 @@ _no_stack_switch:
     decl    %gs:(int_depth)
     movl    %gs:(int_depth), %eax
     cmpl    $0, %eax
-    jne     _no_stack_restore
+    jne     _no_stack_restore           // if we're still inside ISR
 
     movq    %gs:(tid_next), %rax
-    movq    (%rax), %rsp                // switch to `tid_next->regs->rsp`
+    movq    0x00(%rax), %rsp            // switch to `tid_next->regs->rsp`
     movq    0x08(%rax), %rbx            // get tcb->rsp0
-    //movq    0x10(%rax), %rcx            // get tcb->pgtbl
+    movq    0x10(%rax), %rcx            // get tcb->pgtbl
     movq    %rax, %gs:(tid_prev)        // update `tid_prev`
     movq    $tss, %rdx
     movq    %rbx, %gs:4(%rdx)           // store rsp0 in tss (maybe unaligned?)
+    movq    %cr3, %rdx
+    cmpq    %rcx, %rdx                  // compare target cr3 and current cr3
+    je      4f                          // still in the same address space
+    movq    %rcx, %cr3                  // load new page table into cr3
+4:
     call    work_dequeue                // flush work queue
 
 _no_stack_restore:
     testl   $3, 136(%rsp)               // if going to user mode
-    je      4f
+    je      5f
     swapgs
-4:
+5:
     restore_regs                        // restore all registers
     addq    $8, %rsp                    // skip error code
     iretq                               // return from exception
@@ -215,13 +221,17 @@ task_switch:
     save_regs                           // save rest of the registers on stack
     movq    %rsp, (%rsi)                // store the stack top into TCB
 
-    movq    (%rdi), %rsp                // switch to new task stack
+    movq    0x00(%rdi), %rsp            // switch to new task stack
     movq    0x08(%rdi), %rbx            // get tcb->rsp0
     movq    0x10(%rdi), %rcx            // get tcb->pgtbl
     movq    %rdi, %gs:(tid_prev)        // update `tid_prev`, context already saved
-    movq    $tss, %rdx
-    movq    %rbx, %gs:4(%rdx)           // store rsp0 in tss
-    //movq    %cr3, 
+    movq    $tss, %rax
+    movq    %rbx, %gs:4(%rax)           // store rsp0 in tss
+    movq    %cr3, %rax
+    cmpq    %rcx, %rax                  // compare target cr3 and current cr3
+    je      6f                          // still in the same address space
+    movq    %rcx, %cr3                  // load new page table into cr3
+6:
     call    work_dequeue                // flush work queue
 
     restore_regs                        // restore all registers

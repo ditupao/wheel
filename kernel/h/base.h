@@ -19,8 +19,10 @@ typedef u32                     pfn_t;          // at most 2^32 pages
 
 #define NO_PAGE                 ((pfn_t) -1)    // invalid page number
 #define NO_ADDR                 ((usize) -1)    // invalid address
-#define OK                      ((int)    0)
-#define ERROR                   ((int)   -1)
+#define OK                      ((int)    0)    // return code
+#define ERROR                   ((int)   -1)    // return code
+#define YES                     ((int)    1)    // boolean value
+#define NO                      ((int)    0)    // boolean value
 
 #define __UNUSED                __attribute__((unused))
 #define __PACKED                __attribute__((packed))

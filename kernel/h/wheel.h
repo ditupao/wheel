@@ -12,6 +12,7 @@
 #include <core/task.h>
 #include <core/elf64.h>
 #include <core/vmspace.h>
+#include <core/process.h>
 
 #include <libk/ctype.h>
 #include <libk/string.h>

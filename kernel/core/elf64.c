@@ -102,14 +102,31 @@ usize elf64_parse(u8 * buf, usize len) {
         return 0;
     }
 
-    // TODO: at least one PT_LOAD segment. exit if not found
-    // PT_LOAD segments cannot overlap
+    vmspace_t * vm = &(thiscpu_var(tid_prev)->pid->vmspace);
+
+    // make sure address space is valid
     for (int i = 0; i < hdr->e_phnum; ++i) {
         elf64_phdr_t * phdr = (elf64_phdr_t *) (buf + hdr->e_phoff + i * hdr->e_phentsize);
         if (PT_LOAD != phdr->p_type) {
             continue;
         }
-        dbg_print("-- LOAD to 0x%llx, size 0x%x, attr %u.\r\n", phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
+
+        usize vm_start = ROUND_DOWN(phdr->p_vaddr, PAGE_SIZE);
+        usize vm_end   = ROUND_UP(phdr->p_vaddr + phdr->p_memsz, PAGE_SIZE);
+        if (NO == vmspace_is_free(vm, vm_start, vm_end - vm_start)) {
+            // cannot full-fill the requirements, exiting
+            return 0;
+        }
+    }
+
+    // loop through the phdr table again, and load each segment into memory
+    for (int i = 0; i < hdr->e_phnum; ++i) {
+        elf64_phdr_t * phdr = (elf64_phdr_t *) (buf + hdr->e_phoff + i * hdr->e_phentsize);
+        if (PT_LOAD != phdr->p_type) {
+            continue;
+        }
+        dbg_print("-- LOAD to 0x%llx, size 0x%x, attr %u.\r\n",
+                  phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
         elf64_load_segment(buf + phdr->p_offset, phdr);
     }
 

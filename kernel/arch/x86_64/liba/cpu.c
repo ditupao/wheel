@@ -246,17 +246,19 @@ void int_dispatch(int vec, int_frame_t * f) {
 
 extern __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4);
 
-void regs_init(regs_t * regs, void * sp, void * proc,
+void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
                void * a1, void * a2, void * a3, void * a4) {
     dbg_assert(0 != regs);
     dbg_assert(0 != sp);
     dbg_assert(0 != proc);
 
+    // stack pointer must be 8-byte aligned
+    sp &= ~7UL;
+
     memset(regs, 0, sizeof(regs_t));
-    sp = (void *) ((u64) sp & ~7);
     regs->rsp  = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
     regs->rsp0 = (u64) sp;
-    regs->cr3  = read_cr3();
+    regs->cr3  = (u64) ctx;
 
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment
@@ -270,19 +272,19 @@ void regs_init(regs_t * regs, void * sp, void * proc,
     regs->rsp->r8     = (u64) a4;
 }
 
-void regs_pgtbl_set(regs_t * regs, usize tbl) {
-    regs->cr3 = (u64) tbl;
+void regs_ctx_set(regs_t * regs, usize ctx) {
+    regs->cr3 = (u64) ctx;
 }
 
-usize regs_pgtbl_get(regs_t * regs) {
-    return regs->cr3;
+usize regs_ctx_get(regs_t * regs) {
+    return (usize) regs->cr3;
 }
 
-void regs_retval_set(regs_t * regs, usize val) {
+void regs_ret_set(regs_t * regs, usize val) {
     regs->rsp->rax = (u64) val;
 }
 
-usize regs_retval_get(regs_t * regs) {
+usize regs_ret_get(regs_t * regs) {
     return (usize) regs->rsp->rax;
 }
 

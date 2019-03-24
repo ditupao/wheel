@@ -102,60 +102,18 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 }
 
 //------------------------------------------------------------------------------
-// create page table for kernel context
-
-// defined in `mmu.c`
-extern usize kernel_ctx;
-
-// // TODO: add MMU_KERNEL mark to mapping attributes
-// // we allow user access just for test purpose
-// static __INIT void kernel_ctx_create() {
-//     usize virt, phys, mark;
-
-//     // boot, trampoline and init sections
-//     virt = KERNEL_VMA;
-//     phys = KERNEL_LMA;
-//     mark = ROUND_UP(&_init_end, PAGE_SIZE);
-//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
-
-//     // kernel code section
-//     virt = mark;
-//     phys = virt - KERNEL_VMA + KERNEL_LMA;
-//     mark = ROUND_UP(&_text_end, PAGE_SIZE);
-//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
-
-//     // kernel read only data section
-//     virt = mark;
-//     phys = virt - KERNEL_VMA + KERNEL_LMA;
-//     mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
-//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
-
-//     // kernel data section
-//     virt = mark;
-//     phys = virt - KERNEL_VMA + KERNEL_LMA;
-//     mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
-//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
-
-//     // map all physical memory to higher half
-//     // TODO: only map present pages, and add IO/Local APIC in driver
-//     mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
-
-//     // map all physical memory to lower half (identity mapping)
-//     mmu_map(kernel_ctx, 0, 0, 1U << 20, 0);
-// }
-
-//------------------------------------------------------------------------------
 // pre-kernel initialization routines
 
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
 
-// kernel page table
-// static __INITDATA usize  kernel_ctx;
+// kernel page table， defined in `mmu.c`
+extern usize kernel_ctx;
 
-// tcb for root and idle tasks
-static __INITDATA task_t root_tcb;
-static __PERCPU   task_t idle_tcb;
+// init process, root task and idle tasks
+static            process_t init_pcb;
+static __INITDATA task_t    root_tcb;
+static __PERCPU   task_t    idle_tcb;
 
 // forward declarations
 static void root_proc();
@@ -219,14 +177,15 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     ioapic_init_all();
     loapic_dev_init();
 
-    // TODO: create init process, and set current ctx
-    kernel_ctx_init();
-    mmu_ctx_set(kernel_ctx);
-
     // init core kernel facilities
     work_lib_init();
     tick_lib_init();
     task_lib_init();
+
+    // init kernel address mapping and init process
+    kernel_ctx_init();
+    process_init(&init_pcb);
+    mmu_ctx_set(init_pcb.ctx);
 
     // dummy tcb
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
@@ -234,10 +193,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for root and idle-0
-    task_init(&root_tcb, 10, 0, root_proc, 0,0,0,0);
-    task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
-    // root_tcb.regs.cr3 = kernel_ctx;
-    // thiscpu_ptr(idle_tcb)->regs.cr3 = kernel_ctx;
+    task_init(&root_tcb, &init_pcb, 10, 0, root_proc, 0,0,0,0);
+    task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
     atomic32_inc(&cpu_activated);
@@ -265,8 +222,7 @@ __INIT __NORETURN void sys_init_ap() {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for idle task
-    task_init(thiscpu_ptr(idle_tcb), PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
-    // thiscpu_ptr(idle_tcb)->regs.cr3 = kernel_ctx;
+    task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
     dbg_print("processor %02d running.\r\n", cpu_activated);
 
@@ -292,20 +248,6 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
-// void user_code() {
-//     char * video = (char *) phys_to_virt(0xb8000);
-
-//     video[0] = '3';
-//     video[1] = 0x4e;
-
-//     ASM("int $0x80");
-
-//     video[2] = '4';
-//     video[3] = 0x4e;
-
-//     while (1) {}
-// }
-
 static void root_proc() {
     console_dev_init();
     dbg_print("processor 00 running.\r\n");
@@ -329,20 +271,20 @@ static void root_proc() {
 
     dbg_print("all cpu started!\r\n");
 
-    vmspace_t vm;
-    vmspace_init(&vm);
-    vmspace_add_free(&vm, 0x1000000UL, 0x1000000UL);
-    vmrange_t * got = vmspace_alloc(&vm, 0x100000);
-    if (NULL == got) {
-        dbg_print("cannot alloc vm range!\r\n");
-    } else {
-        dbg_print("got vm range from 0x%llx.\r\n", got->addr);
-    }
+    // vmspace_t vm;
+    // vmspace_init(&vm);
+    // vmspace_add_free(&vm, 0x1000000UL, 0x1000000UL);
+    // vmrange_t * got = vmspace_alloc(&vm, 0x100000);
+    // if (NULL == got) {
+    //     dbg_print("cannot alloc vm range!\r\n");
+    // } else {
+    //     dbg_print("got vm range from 0x%llx.\r\n", got->addr);
+    // }
 
+    // parse and load elf file, embedded as RAMFS
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     usize entry = elf64_parse(bin_addr, bin_size);
-    // dbg_print("elf file parsing %s.\r\n", (OK == ret) ? "ok" : "failed");
     if (0 != entry) {
         // allocate stack space for user-mode stack
         pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);

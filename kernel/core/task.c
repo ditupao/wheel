@@ -122,20 +122,26 @@ static int task_cont(task_t * tid, u32 state) {
 // TODO: also save tid in page_array (kernel object always in higher half,
 //       8-bytes aligned? 47-3=45 bits, so only 45 bits is enough. If we
 //       want to use less bits, we can allocate tcb only from one pool)
-void task_init(task_t * tid, u32 priority, u32 cpu_idx, void * proc,
-               void * a1, void * a2, void * a3, void * a4) {
+void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
+               void * proc, void * a1, void * a2, void * a3, void * a4) {
     dbg_assert(NULL != tid);
     dbg_assert(priority < PRIORITY_COUNT);
     dbg_assert(cpu_idx < cpu_installed);
 
     pfn_t pn_stk = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
-    u8 *  va_stk = phys_to_virt((usize) pn_stk << PAGE_SHIFT);
+    if (NO_PAGE == pn_stk) {
+        // memory not enough, cannot create task
+        return;
+    }
     for (pfn_t i = 0; i < 16; ++i) {
         page_array[pn_stk + i].type = PT_KSTACK;
     }
 
-    regs_init(&tid->regs, va_stk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+    usize va_stk = (usize) phys_to_virt((usize) pn_stk << PAGE_SHIFT);
+    regs_init(&tid->regs, pid->ctx, va_stk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+
     tid->lock     = SPIN_INIT;
+    tid->pid      = pid;
     tid->priority = priority;
     tid->cpu_idx  = cpu_idx;
     tid->state    = TS_SUSPEND;

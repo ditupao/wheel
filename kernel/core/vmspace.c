@@ -147,16 +147,17 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if (range->addr > addr) {
-            break;
-        }
         if ((RT_FREE != RANGE_TYPE(range->size_type)) &&
             (end > range->addr + RANGE_SIZE(range->size_type))) {
             continue;
         }
 
-        // found a valid range
+        if (range->addr > addr) {
+            // already passed the end, so target range is not free
+            break;
+        }
 
+        // we've found a valid range, return extra space
         if (range->addr < addr) {
             vmrange_t * prev = (vmrange_t *) pool_obj_alloc(&range_pool);
             prev->dl        = DLNODE_INIT;
@@ -203,4 +204,31 @@ void vmspace_free(vmspace_t * space, vmrange_t * range) {
             dl_remove(&space->ranges, &next->dl);
         }
     }
+}
+
+// check whether the given range is free
+int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
+    dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
+    dbg_assert((size & (PAGE_SIZE - 1)) == 0);
+
+    usize end = addr + size;
+
+    for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
+        vmrange_t * range = PARENT(dl, vmrange_t, dl);
+        if ((RT_FREE != RANGE_TYPE(range->size_type)) &&
+            (end > range->addr + RANGE_SIZE(range->size_type))) {
+            continue;
+        }
+
+        if (range->addr > addr) {
+            // already passed the end, so target range is not free
+            break;
+        }
+
+        // found a valid range
+        return YES;
+    }
+
+    // no such range, or range is not free
+    return NO;
 }

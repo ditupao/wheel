@@ -3,17 +3,19 @@
 
 #include <base.h>
 #include "spin.h"
+#include "process.h"
 #include <libk/list.h>
 
 typedef struct task {
-    regs_t     regs;            // task context
-    spin_t     lock;
-    u32        priority;
-    u32        cpu_idx;         // affinity cpu
-    u32        state;
-    pfn_t      stack;           // this is kernel stack
-    dlnode_t   node;            // node in ready/pend queue
-    dllist_t * queue;           // which queue is this task in
+    regs_t      regs;           // arch-specific status
+    spin_t      lock;
+    process_t * pid;            // container process
+    u32         priority;
+    u32         cpu_idx;        // affinity cpu
+    u32         state;
+    pfn_t       stack;          // this is kernel stack
+    dlnode_t    node;           // node in ready/pend queue
+    dllist_t  * queue;          // which queue is this task in
 } task_t;
 
 // 32 priorities at momst, so we can use `u32` as priority bitmask
@@ -36,8 +38,8 @@ extern __PERCPU u32      no_preempt;
 static inline void preempt_lock  () { thiscpu32_add(&no_preempt, 2); }
 static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 
-extern void task_init   (task_t * tid, u32 priority, u32 cpu_idx, void * proc,
-                         void * a1, void * a2, void * a3, void * a4);
+extern void task_init   (task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
+                         void * proc, void * a1, void * a2, void * a3, void * a4);
 extern void task_destroy(task_t * tid);
 extern void task_suspend(task_t * tid);
 extern void task_resume (task_t * tid);

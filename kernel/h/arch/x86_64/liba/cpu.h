@@ -171,14 +171,14 @@ extern __INIT void int_init   ();
 //------------------------------------------------------------------------------
 // task support
 
-extern void  task_switch    ();
-extern void  enter_user     (u64 ip, u64 sp);
-extern void  regs_init      (regs_t * regs, void * sp, void * proc,
-                             void * a1, void * a2, void * a3, void * a4);
-extern void  regs_pgtbl_set (regs_t * regs, usize tbl);
-extern usize regs_pgtbl_get (regs_t * regs);
-extern void  regs_retval_set(regs_t * regs, usize val);
-extern usize regs_retval_get(regs_t * regs);
-extern void  smp_reschedule (u32 cpu);
+extern void  task_switch   ();
+extern void  enter_user    (u64 ip, u64 sp);
+extern void  regs_init     (regs_t * regs, usize ctx, usize sp, void * proc,
+                            void * a1, void * a2, void * a3, void * a4);
+extern void  regs_ctx_set  (regs_t * regs, usize ctx);
+extern usize regs_ctx_get  (regs_t * regs);
+extern void  regs_ret_set  (regs_t * regs, usize val);
+extern usize regs_ret_get  (regs_t * regs);
+extern void  smp_reschedule(u32 cpu);
 
 #endif // ARCH_X86_64_LIBA_CPU_H

@@ -104,45 +104,45 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 //------------------------------------------------------------------------------
 // create page table for kernel context
 
-// TODO: add MMU_KERNEL mark to mapping attributes
-// we allow user access just for test purpose
-static __INIT usize ctx_create() {
-    usize virt, phys, mark;
-    usize ctx = mmu_ctx_create();
+// defined in `mmu.c`
+extern usize kernel_ctx;
 
-    // boot, trampoline and init sections
-    virt = KERNEL_VMA;
-    phys = KERNEL_LMA;
-    mark = ROUND_UP(&_init_end, PAGE_SIZE);
-    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
+// // TODO: add MMU_KERNEL mark to mapping attributes
+// // we allow user access just for test purpose
+// static __INIT void kernel_ctx_create() {
+//     usize virt, phys, mark;
 
-    // kernel code section
-    virt = mark;
-    phys = virt - KERNEL_VMA + KERNEL_LMA;
-    mark = ROUND_UP(&_text_end, PAGE_SIZE);
-    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
+//     // boot, trampoline and init sections
+//     virt = KERNEL_VMA;
+//     phys = KERNEL_LMA;
+//     mark = ROUND_UP(&_init_end, PAGE_SIZE);
+//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
 
-    // kernel read only data section
-    virt = mark;
-    phys = virt - KERNEL_VMA + KERNEL_LMA;
-    mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
-    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
+//     // kernel code section
+//     virt = mark;
+//     phys = virt - KERNEL_VMA + KERNEL_LMA;
+//     mark = ROUND_UP(&_text_end, PAGE_SIZE);
+//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
 
-    // kernel data section
-    virt = mark;
-    phys = virt - KERNEL_VMA + KERNEL_LMA;
-    mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
-    mmu_map(ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
+//     // kernel read only data section
+//     virt = mark;
+//     phys = virt - KERNEL_VMA + KERNEL_LMA;
+//     mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
+//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
 
-    // map all physical memory to higher half
-    // TODO: only map present pages, and add IO/Local APIC in driver
-    mmu_map(ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
+//     // kernel data section
+//     virt = mark;
+//     phys = virt - KERNEL_VMA + KERNEL_LMA;
+//     mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
+//     mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
 
-    // map all physical memory to lower half (identity mapping)
-    mmu_map(ctx, 0, 0, 1U << 20, 0);
+//     // map all physical memory to higher half
+//     // TODO: only map present pages, and add IO/Local APIC in driver
+//     mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
 
-    return ctx;
-}
+//     // map all physical memory to lower half (identity mapping)
+//     mmu_map(kernel_ctx, 0, 0, 1U << 20, 0);
+// }
 
 //------------------------------------------------------------------------------
 // pre-kernel initialization routines
@@ -151,7 +151,7 @@ static __INIT usize ctx_create() {
 static __INITDATA mb_info_t mbi;
 
 // kernel page table
-static __INITDATA usize  kernel_ctx;
+// static __INITDATA usize  kernel_ctx;
 
 // tcb for root and idle tasks
 static __INITDATA task_t root_tcb;
@@ -219,7 +219,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     ioapic_init_all();
     loapic_dev_init();
 
-    kernel_ctx = ctx_create();
+    // TODO: create init process, and set current ctx
+    kernel_ctx_init();
     mmu_ctx_set(kernel_ctx);
 
     // init core kernel facilities

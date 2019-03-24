@@ -4,6 +4,7 @@ static pool_t range_pool;
 
 void vmspace_init(vmspace_t * space) {
     space->ranges = DLLIST_INIT;
+    vmspace_add_free(space, USER_START, USER_END - USER_START);
 }
 
 void vmspace_destroy(vmspace_t * space) {

@@ -17,7 +17,11 @@
 #define MAPPED_ADDR     0xffff800000000000UL    // higher-half
 #define MAPPED_SIZE     0x0000100000000000UL    // 4K*2^32 = 16TB
 
-// memory zone layout
+// user virtual memory (vmspace)
+#define USER_START      0x0000000000000000UL    // 0
+#define USER_END        0x0000800000000000UL    // just below canonical hole
+
+// memory zone layout (physical memory manager)
 #define DMA_START       0x0000000000000000UL    // 0
 #define DMA_END         0x0000000001000000UL    // 16MB
 #define NORMAL_START    0x0000000001000000UL    // 16MB

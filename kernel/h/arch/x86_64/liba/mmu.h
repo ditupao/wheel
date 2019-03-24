@@ -15,4 +15,6 @@ extern usize mmu_translate(usize ctx, usize va);
 extern void  mmu_map(usize ctx, usize va, usize pa, usize n, u32 attr);
 extern void  mmu_unmap(usize ctx, usize va, usize n);
 
+extern __INIT void kernel_ctx_init();
+
 #endif // ARCH_X86_64_LIBA_MMU_H

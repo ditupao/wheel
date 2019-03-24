@@ -1,5 +1,11 @@
 #include <wheel.h>
 
+// currently we don't support shared page (sub) tables
+// when virtual address is unmapped, its page tables are not free-ed
+// the empty page table remains in memory
+// ADDR field indicates if the table is allocated
+// TODO: do we need an arch-dependent struct that describes page table attrs?
+
 // different fields of virtual memory address
 #define PML4E_SHIFT 39      // page-map level-4 offset
 #define PDPE_SHIFT  30      // page-directory-pointer offset
@@ -22,11 +28,14 @@
 #define MMU_PAT_4K  0x0000000000000080UL    // (PAT) for 4K PTE
 #define MMU_PAT_2M  0x0000000000001000UL    // (PAT) for 2M PDE
 
-// currently we don't support shared page (sub) tables
-// when virtual address is unmapped, its page tables are not free-ed
-// the empty page table remains in memory
-// ADDR field indicates if the table is allocated
-// TODO: do we need an arch-dependent struct that describes page table attrs?
+// contains mapping for kernel space
+usize kernel_ctx;
+
+// defined in `layout.ld`
+extern u8 _init_end;
+extern u8 _text_end;
+extern u8 _rodata_end;
+extern u8 _kernel_end;
 
 //------------------------------------------------------------------------------
 // private functions for creating page entry
@@ -117,9 +126,12 @@ void mmu_ctx_set(usize ctx) {
 // create a new context table, allocate space for top-level table
 usize mmu_ctx_create() {
     pfn_t pml4t = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
-    u64   addr  = (u64) pml4t << PAGE_SHIFT;
-    memset(phys_to_virt(addr), 0, PAGE_SIZE);
-    return addr;
+    u64   ctx   = (u64) pml4t << PAGE_SHIFT;
+    memset(phys_to_virt(ctx), 0, PAGE_SIZE / 2);        // user space
+    memcpy(phys_to_virt(ctx)        + PAGE_SIZE / 2,    // kernel space
+           phys_to_virt(kernel_ctx) + PAGE_SIZE / 2,
+           PAGE_SIZE / 2);
+    return ctx;
 }
 
 // perform address translation by checking page table
@@ -220,4 +232,42 @@ void mmu_unmap(usize ctx, usize va, usize n) {
             }
         }
     }
+}
+
+//------------------------------------------------------------------------------
+// create page table for kernel range
+
+__INIT void kernel_ctx_init() {
+    usize virt, phys, mark;
+
+    // boot, trampoline and init sections
+    virt = KERNEL_VMA;
+    phys = KERNEL_LMA;
+    mark = ROUND_UP(&_init_end, PAGE_SIZE);
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
+
+    // kernel code section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&_text_end, PAGE_SIZE);
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
+
+    // kernel read only data section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
+
+    // kernel data section
+    virt = mark;
+    phys = virt - KERNEL_VMA + KERNEL_LMA;
+    mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
+
+    // map all physical memory to higher half
+    // TODO: only map present pages, and add IO/Local APIC in driver
+    mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
+
+    // map all physical memory to lower half (identity mapping)
+    mmu_map(kernel_ctx, 0, 0, 1U << 20, 0);
 }

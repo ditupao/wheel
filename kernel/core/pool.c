@@ -12,12 +12,13 @@ void pool_init(pool_t * pool, u32 obj_size) {
         return;
     }
 
-    // TODO: define L1 cache-line size in configuration
-    if (obj_size < 64) {
-        obj_size = 1UL << (32 - CLZ32(obj_size - 1));
-    } else {
-        obj_size = ROUND_UP(obj_size, 64); 
-    }
+    // // TODO: define L1 cache-line size in configuration
+    // if (obj_size < 64) {
+    //     obj_size = 1UL << (32 - CLZ32(obj_size - 1));
+    // } else {
+    //     obj_size = ROUND_UP(obj_size, 64); 
+    // }
+    obj_size = ROUND_UP(obj_size, 8);
 
     // initialize member variables
     pool->lock         = SPIN_INIT;

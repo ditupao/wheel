@@ -119,6 +119,10 @@ static __PERCPU   task_t    idle_tcb;
 static void root_proc();
 static void idle_proc();
 
+// for test only
+semaphore_t sem_tst;
+wdog_t      wd_tst;
+
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // enable early debug output
     serial_dev_init();
@@ -187,6 +191,10 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     process_init(&init_pcb);
     mmu_ctx_set(init_pcb.ctx);
 
+    // binary semaphore, a.k.a. mutex
+    semaphore_init(&sem_tst, 1, 1);
+    wdog_init(&wd_tst);
+
     // dummy tcb
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
     thiscpu_var(tid_prev) = &tcb_temp;
@@ -248,6 +256,15 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
+// defined in tick.c
+extern u64 tick_count;
+
+static void wd_cb() {
+    // semaphore_give(&sem_tst);
+    dbg_print("!");
+    wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
+}
+
 static void root_proc() {
     console_dev_init();
     dbg_print("processor 00 running.\r\n");
@@ -271,16 +288,7 @@ static void root_proc() {
 
     dbg_print("all cpu started!\r\n");
 
-    // vmspace_t vm;
-    // vmspace_init(&vm);
-    // vmspace_add_free(&vm, 0x1000000UL, 0x1000000UL);
-    // vmrange_t * got = vmspace_alloc(&vm, 0x100000);
-    // if (NULL == got) {
-    //     dbg_print("cannot alloc vm range!\r\n");
-    // } else {
-    //     dbg_print("got vm range from 0x%llx.\r\n", got->addr);
-    // }
-
+#if 0
     // parse and load elf file, embedded as RAMFS
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
@@ -293,8 +301,14 @@ static void root_proc() {
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }
+#endif
 
-    while (1) {}
+    wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
+
+    while (1) {
+        semaphore_take(&sem_tst, 0);
+        dbg_print("<%x>", tick_count);
+    }
 }
 
 static void idle_proc() {

@@ -6,7 +6,7 @@ typedef struct tick_q {
 } tick_q_t;
 
 static tick_q_t tick_q;
-static u64 tick_count;
+u64 tick_count;
 
 void wdog_init(wdog_t * wd) {
     memset(wd, 0, sizeof(wdog_t));

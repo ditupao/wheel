@@ -97,18 +97,21 @@ void console_puts(const char * s) {
 }
 
 __INIT void console_dev_init() {
-    u64 * dst = (u64 *) vbuf;
+    location.attr = 0x0f;   // white on black
+    location.row  = 0;
+    location.col  = 0;
+    location.base = 0;
+
+    u64 * dst  = (u64 *) vbuf;
+    u64   fill = (u64) ' ' | ((u64) location.attr << 8);
+    fill |= fill << 16;
+    fill |= fill << 32;
     for (int i = 0; i < ROW_COUNT * COL_COUNT / 4; ++i) {
-        dst[i] = 0x1f201f201f201f20UL;
+        dst[i] = fill;
     }
 
     vram = (u16 *) phys_to_virt(0xb8000);
     memcpy(vram, vbuf, ROW_COUNT * COL_COUNT * 2);
-
-    location.attr = 0x1f;   // white on blue
-    location.row  = 0;
-    location.col  = 0;
-    location.base = 0;
 
     dev_installed = 1;
 }

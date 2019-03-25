@@ -16,6 +16,7 @@ typedef struct task {
     pfn_t       stack;          // this is kernel stack
     dlnode_t    node;           // node in ready/pend queue
     dllist_t  * queue;          // which queue is this task in
+    wdog_t      wdog;           // used for delay and timeout
 } task_t;
 
 // 32 priorities at momst, so we can use `u32` as priority bitmask
@@ -41,8 +42,12 @@ static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 extern void task_init   (task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
                          void * proc, void * a1, void * a2, void * a3, void * a4);
 extern void task_destroy(task_t * tid);
+extern int  task_stop   (task_t * tid, u32 state);
+extern int  task_cont   (task_t * tid, u32 state);
 extern void task_suspend(task_t * tid);
 extern void task_resume (task_t * tid);
+extern void task_delay  (task_t * tid, int ticks);
+extern void task_wakeup (task_t * tid);
 
 extern __INIT void task_lib_init();
 

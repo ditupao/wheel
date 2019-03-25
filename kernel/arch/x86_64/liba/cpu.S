@@ -143,7 +143,7 @@ interrupt_stub:
 
     testl   $3, 136(%rsp)               // if come from user mode
     je      3f
-    swapgs
+    swapgs                              // swap gs.base with kernel-gs.base
 3:
     incl    %gs:(int_depth)
     movl    %gs:(int_depth), %eax

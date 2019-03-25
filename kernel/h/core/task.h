@@ -46,8 +46,8 @@ extern int  task_stop   (task_t * tid, u32 state);
 extern int  task_cont   (task_t * tid, u32 state);
 extern void task_suspend(task_t * tid);
 extern void task_resume (task_t * tid);
-extern void task_delay  (task_t * tid, int ticks);
-extern void task_wakeup (task_t * tid);
+// extern void task_delay  (task_t * tid, int ticks);
+// extern void task_wakeup (task_t * tid);
 
 extern __INIT void task_lib_init();
 

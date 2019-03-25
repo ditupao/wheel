@@ -14,24 +14,44 @@ void semaphore_init(semaphore_t * sem, int limit, int count) {
     sem->pend_q = DLLIST_INIT;
 }
 
+// executed in ISR
+static void semaphore_timeout(task_t * tid, semaphore_t * sem) {
+    u32 key = irq_spin_take(&tid->lock);
+    raw_spin_take(&sem->lock);
+
+    task_cont(tid, TS_PEND);
+    dl_remove(&sem->pend_q, &tid->node);
+
+    raw_spin_give(&sem->lock);
+    irq_spin_give(&tid->lock, key);
+}
+
 // return OK if successfully taken the semaphore
 // return ERROR if failed (might block)
 int semaphore_take(semaphore_t * sem, int timeout) {
-    u32 key = irq_spin_take(&sem->lock);
+    task_t * tid = thiscpu_var(tid_prev);
+    u32 key = irq_spin_take(&tid->lock);
+    raw_spin_take(&sem->lock);
     if (sem->count) {
         --sem->count;
-        irq_spin_give(&sem->lock, key);
+        raw_spin_give(&sem->lock);
+        irq_spin_give(&tid->lock, key);
         return OK;
     } else {
-        task_t * self = thiscpu_var(tid_prev);
+        // pend current task
+        task_stop(tid, TS_PEND);
+        dl_push_tail(&sem->pend_q, &tid->node);
+        tid->queue = &sem->pend_q;
 
-        u32 key = int_lock();
-        task_stop(self, TS_PEND);
-        dl_push_tail(&sem->pend_q, &self->node);
-        irq_spin_give(&sem->lock, key);
-        int_unlock(key);
+        // create timeout watchdog
+        if (0 != timeout) {
+            wdog_cancel(&tid->wdog);
+            wdog_start(&tid->wdog, timeout, semaphore_timeout, tid, sem, 0,0);
+        }
 
-        // hand over cpu to other task
+        // hand over control to other task
+        raw_spin_give(&sem->lock);
+        irq_spin_give(&tid->lock, key);
         task_switch();
 
         return OK;
@@ -39,17 +59,25 @@ int semaphore_take(semaphore_t * sem, int timeout) {
 }
 
 int semaphore_trytake(semaphore_t * sem) {
-    u32 key = irq_spin_take(&sem->lock);
+    task_t * tid = thiscpu_var(tid_prev);
+    u32 key = irq_spin_take(&tid->lock);
+    raw_spin_take(&sem->lock);
+
     if (sem->count) {
         --sem->count;
-        irq_spin_give(&sem->lock, key);
+        raw_spin_give(&sem->lock);
+        irq_spin_give(&tid->lock, key);
         return OK;
     }
+
+    raw_spin_give(&sem->lock);
+    irq_spin_give(&tid->lock, key);
     return ERROR;
 }
 
 void semaphore_give(semaphore_t * sem) {
     u32 key = irq_spin_take(&sem->lock);
+
     dlnode_t * dl = dl_pop_head(&sem->pend_q);
     if (NULL == dl) {
         if (sem->count < sem->limit) {
@@ -59,13 +87,17 @@ void semaphore_give(semaphore_t * sem) {
         return;
     }
 
-    task_t * next = PARENT(dl, task_t, node);
-    task_cont(next, TS_PEND);
+    task_t * tid = PARENT(dl, task_t, node);
+    u32      cpu = tid->cpu_idx;
+    raw_spin_take(&tid->lock);
+
+    task_cont(tid, TS_PEND);
+    raw_spin_give(&tid->lock);
     irq_spin_give(&sem->lock, key);
 
-    if (cpu_index() == next->cpu_idx) {
+    if (cpu_index() == cpu) {
         task_switch();
     } else {
-        smp_reschedule(next->cpu_idx);
+        smp_reschedule(cpu);
     }
 }

@@ -54,7 +54,7 @@ SECTIONS {
     } :kernel =0
     .bss ALIGN(16) (NOLOAD) : AT(ADDR(.bss) - KERNEL_VMA + KERNEL_LMA) {
         *(.bss)
-        *(.COMMON)
+        *(COMMON)
         _kernel_end = .;
     } :kernel
 

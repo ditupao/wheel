@@ -81,6 +81,7 @@ void task_destroy(task_t * tid) {
 //------------------------------------------------------------------------------
 // task state switching
 // caller need to lock interrupt, or risk being switched-out
+// caller also need to lock target tid, or might be deleted by others
 // following operations need to be carried out when interrupts locked
 // after unlocking interrupts, call `task_switch` or `smp_reschedule` manually
 
@@ -88,16 +89,10 @@ void task_destroy(task_t * tid) {
 // return ERROR if already stopped.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
 int task_stop(task_t * tid, u32 state) {
-    // lock cpu interrupt and target task
-    // u32 key = int_lock();
-    raw_spin_take(&tid->lock);
-
     // change state, return if already stopped
     u32 old_state = tid->state;
     tid->state |= state;
     if (TS_READY != old_state) {
-        raw_spin_give(&tid->lock);
-        // int_unlock(key);
         return ERROR;
     }
 
@@ -121,10 +116,8 @@ int task_stop(task_t * tid, u32 state) {
         percpu_var(cpu, tid_next) = cand;
     }
 
-    // release all locks
-    raw_spin_give(&rdy->lock);  // after this point, `tid_next` might be changed again
-    raw_spin_give(&tid->lock);
-    // int_unlock(key);            // after this point, this task might be switched out
+    // after this point, `tid_next` might be changed again
+    raw_spin_give(&rdy->lock);
     return OK;
 }
 
@@ -133,16 +126,10 @@ int task_stop(task_t * tid, u32 state) {
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
 // caller should call `task_switch` or `smp_reschedule` manually.
 int task_cont(task_t * tid, u32 state) {
-    // lock cpu interrupt and target task
-    // u32 key = int_lock();
-    raw_spin_take(&tid->lock);
-
     // change state, return if already running
     u32 old_state = tid->state;
     tid->state &= ~state;
     if ((TS_READY == old_state) || (TS_READY != tid->state)) {
-        raw_spin_give(&tid->lock);
-        // int_unlock(key);
         return ERROR;
     }
 
@@ -163,10 +150,8 @@ int task_cont(task_t * tid, u32 state) {
         percpu_var(cpu, tid_next) = tid;
     }
 
-    // release all locks
+    // after this point, `tid_next` might be changed again
     raw_spin_give(&rdy->lock);
-    raw_spin_give(&tid->lock);
-    // int_unlock(key);
     return OK;
 }
 
@@ -174,14 +159,19 @@ int task_cont(task_t * tid, u32 state) {
 void task_suspend(task_t * tid) {
     dbg_assert(NULL != tid);
 
-    u32 key = int_lock();
-    task_stop(tid, TS_SUSPEND);
-    int_unlock(key);
+    u32 cpu = tid->cpu_idx;
+    u32 key = irq_spin_take(&tid->lock);
+    int ret = task_stop(tid, TS_SUSPEND);
+    irq_spin_give(&tid->lock, key);
 
-    if (cpu_index() == tid->cpu_idx) {
+    if (ERROR == ret) {
+        return;
+    }
+
+    if (cpu_index() == cpu) {
         task_switch();
     } else {
-        smp_reschedule(tid->cpu_idx);
+        smp_reschedule(cpu);
     }
 }
 
@@ -189,39 +179,47 @@ void task_suspend(task_t * tid) {
 void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
 
-    u32 key = int_lock();
-    task_cont(tid, TS_SUSPEND);
-    int_unlock(key);
+    u32 cpu = tid->cpu_idx;
+    u32 key = irq_spin_take(&tid->lock);
+    int ret = task_cont(tid, TS_SUSPEND);
+    irq_spin_give(&tid->lock, key);
 
-    if (cpu_index() == tid->cpu_idx) {
+    if (ERROR == ret) {
+        return;
+    }
+
+    if (cpu_index() == cpu) {
         task_switch();
     } else {
-        smp_reschedule(tid->cpu_idx);
+        smp_reschedule(cpu);
     }
 }
 
-// put the task into sleep for a few ticks
-void task_delay(task_t * tid, int ticks) {
-    dbg_assert(NULL != tid);
+// // put the task into sleep for a few ticks
+// void task_delay(task_t * tid, int ticks) {
+//     dbg_assert(NULL != tid);
 
-    u32 key = int_lock();
-    task_stop(tid, TS_DELAY);
-    wdog_cancel(&tid->wdog);
-    wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
-    int_unlock(key);
+//     u32 key = irq_spin_take(&tid->lock);
+//     task_stop(tid, TS_DELAY);
+//     wdog_cancel(&tid->wdog);
+//     wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
+//     irq_spin_give(&tid->lock, key);
 
-    if (cpu_index() == tid->cpu_idx) {
-        task_switch();
-    } else {
-        smp_reschedule(tid->cpu_idx);
-    }
-}
+//     if (cpu_index() == tid->cpu_idx) {
+//         task_switch();
+//     } else {
+//         smp_reschedule(tid->cpu_idx);
+//     }
+// }
 
-void task_wakeup(task_t * tid) {
-    task_cont(tid, TS_DELAY);
-}
+// void task_wakeup(task_t * tid) {
+//     u32 key = irq_spin_take(&tid->lock);
+//     task_cont(tid, TS_DELAY);
+//     irq_spin_give(&tid->lock, key);
+// }
 
 //------------------------------------------------------------------------------
+// module setup
 
 __INIT void task_lib_init() {
     for (u32 i = 0; i < cpu_installed; ++i) {

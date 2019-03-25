@@ -175,6 +175,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     tss_init();
     dbg_regist(symtab, sym_size, strtab, str_size);
     write_gsbase(percpu_base);
+    dbg_print("percpu base %llx, size %llx.\r\n", percpu_base, percpu_size);
 
     // init interrupt handling
     int_init();
@@ -206,7 +207,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
 
     // activate two tasks, switch to root automatically
     atomic32_inc(&cpu_activated);
-    task_resume(thiscpu_ptr(idle_tcb)); 
+    task_resume(thiscpu_ptr(idle_tcb));
     task_resume(&root_tcb);
 
     dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
@@ -260,8 +261,8 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 extern u64 tick_count;
 
 static void wd_cb() {
-    // semaphore_give(&sem_tst);
     dbg_print("!");
+    semaphore_give(&sem_tst);
     wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
 }
 
@@ -312,6 +313,11 @@ static void root_proc() {
 }
 
 static void idle_proc() {
+    // take spinlock and never give out
+    // so this idle task can never be deleted
+    task_t * tid = thiscpu_var(tid_prev);
+    raw_spin_take(&tid->lock);
+
     while (1) {
         ASM("hlt");
     }

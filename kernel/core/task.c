@@ -38,26 +38,32 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     dbg_assert(priority < PRIORITY_COUNT);
     dbg_assert(cpu_idx < cpu_installed);
 
-    pfn_t pn_stk = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
-    if (NO_PAGE == pn_stk) {
+    pfn_t pn = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
+    if (NO_PAGE == pn) {
         // memory not enough, cannot create task
         return;
     }
     for (pfn_t i = 0; i < 16; ++i) {
-        page_array[pn_stk + i].type = PT_KSTACK;
+        page_array[pn + i].type  = PT_KSTACK;
+        page_array[pn + i].block = 0;
     }
+    page_array[pn].block = 1;
+    page_array[pn].order = 4;
+    page_array[pn].next  = NO_PAGE;
+    pid->first_page = pn;
 
-    usize va_stk = (usize) phys_to_virt((usize) pn_stk << PAGE_SHIFT);
-    regs_init(&tid->regs, pid->ctx, va_stk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+    usize va = (usize) phys_to_virt((usize) pn << PAGE_SHIFT);
+    regs_init(&tid->regs, pid->ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
     tid->lock     = SPIN_INIT;
-    tid->pid      = pid;
+    tid->state    = TS_SUSPEND;
+    tid->ret_val  = 0;
     tid->priority = priority;
     tid->cpu_idx  = cpu_idx;
-    tid->state    = TS_SUSPEND;
-    tid->stack    = pn_stk;
+    // tid->stack    = pn;
     tid->node     = DLNODE_INIT;
     tid->queue    = NULL;
+    tid->pid      = pid;
     wdog_init(&tid->wdog);
 }
 
@@ -159,8 +165,8 @@ int task_cont(task_t * tid, u32 state) {
 void task_suspend(task_t * tid) {
     dbg_assert(NULL != tid);
 
-    u32 cpu = tid->cpu_idx;
     u32 key = irq_spin_take(&tid->lock);
+    u32 cpu = tid->cpu_idx;
     int ret = task_stop(tid, TS_SUSPEND);
     irq_spin_give(&tid->lock, key);
 
@@ -179,8 +185,8 @@ void task_suspend(task_t * tid) {
 void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
 
-    u32 cpu = tid->cpu_idx;
     u32 key = irq_spin_take(&tid->lock);
+    u32 cpu = tid->cpu_idx;
     int ret = task_cont(tid, TS_SUSPEND);
     irq_spin_give(&tid->lock, key);
 

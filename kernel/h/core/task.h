@@ -9,13 +9,14 @@
 typedef struct task {
     regs_t      regs;           // arch-specific status
     spin_t      lock;
-    process_t * pid;            // container process
-    u32         priority;
-    u32         cpu_idx;        // affinity cpu
     u32         state;
-    pfn_t       stack;          // this is kernel stack
-    dlnode_t    node;           // node in ready/pend queue
-    dllist_t  * queue;          // which queue is this task in
+    int         ret_val;        // return value from PEND
+    u32         priority;       // must < PRIORITY_COUNT
+    u32         cpu_idx;        // must < cpu_installed
+    // pfn_t       stack;          // this is kernel stack
+    dlnode_t    node;           // node in ready_q/pend_q
+    dllist_t  * queue;          // current ready_q/pend_q
+    process_t * pid;            // container process
     wdog_t      wdog;           // used for delay and timeout
 } task_t;
 

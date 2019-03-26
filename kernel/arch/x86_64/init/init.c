@@ -259,10 +259,22 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 
 // defined in tick.c
 extern u64 tick_count;
+static int fire_count = 0;
 
 static void wd_cb() {
     dbg_print("!");
-    semaphore_give(&sem_tst);
+    ++fire_count;
+    // if (fire_count & 1) {
+    //     root_tcb.ret_val = 1;
+    // } else {
+    //     root_tcb.ret_val = 0;
+    // }
+    if (fire_count < 10) {
+        semaphore_give(&sem_tst);
+    }
+    if (fire_count == 10) {
+        semaphore_destroy(&sem_tst);
+    }
     wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
 }
 
@@ -307,8 +319,8 @@ static void root_proc() {
     wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
 
     while (1) {
-        semaphore_take(&sem_tst, 0);
-        dbg_print("<%x>", tick_count);
+        int ret = semaphore_take(&sem_tst, 0);
+        dbg_print("<%d:%x>", ret, tick_count);
     }
 }
 

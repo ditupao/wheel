@@ -14,6 +14,19 @@ void semaphore_init(semaphore_t * sem, int limit, int count) {
     sem->pend_q = DLLIST_INIT;
 }
 
+void semaphore_destroy(semaphore_t * sem) {
+    u32 key = irq_spin_take(&sem->lock);
+
+    for (dlnode_t * dl = sem->pend_q.head; NULL != dl; dl = dl->next) {
+        task_t * tid = PARENT(dl, task_t, node);
+
+        raw_spin_take(&tid->lock);
+        tid->ret_val = ERROR;
+        task_cont(tid, TS_PEND);
+        raw_spin_give(&tid->lock);
+    }
+}
+
 // executed in ISR
 static void semaphore_timeout(task_t * tid, semaphore_t * sem) {
     u32 key = irq_spin_take(&tid->lock);
@@ -24,6 +37,8 @@ static void semaphore_timeout(task_t * tid, semaphore_t * sem) {
 
     raw_spin_give(&sem->lock);
     irq_spin_give(&tid->lock, key);
+
+    // we're running in ISR, no need to `task_switch()`
 }
 
 // return OK if successfully taken the semaphore
@@ -38,8 +53,10 @@ int semaphore_take(semaphore_t * sem, int timeout) {
         irq_spin_give(&tid->lock, key);
         return OK;
     } else {
-        // pend current task
+        // resource not available, pend current task
+        tid->ret_val = OK;
         task_stop(tid, TS_PEND);
+        // TODO: priority-based or FIFO?
         dl_push_tail(&sem->pend_q, &tid->node);
         tid->queue = &sem->pend_q;
 
@@ -54,7 +71,8 @@ int semaphore_take(semaphore_t * sem, int timeout) {
         irq_spin_give(&tid->lock, key);
         task_switch();
 
-        return OK;
+        // return value set by others
+        return tid->ret_val;
     }
 }
 

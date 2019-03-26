@@ -18,8 +18,10 @@ void wdog_destroy(wdog_t * wd) {
     wdog_cancel(wd);
 }
 
-void wdog_start(wdog_t * wd, usize ticks, void * proc,
+void wdog_start(wdog_t * wd, int ticks, void * proc,
                 void * a1, void * a2, void * a3, void * a4) {
+    dbg_assert(NULL != wd);
+    dbg_assert(ticks >= 0);
     if ((wd->node.prev != &wd->node) && (wd->node.next != &wd->node)) {
         return;
     }
@@ -31,7 +33,7 @@ void wdog_start(wdog_t * wd, usize ticks, void * proc,
     wd->arg4 = a4;
     ticks += 1;
 
-    u32 k = irq_spin_take(&tick_q.lock);
+    u32 key = irq_spin_take(&tick_q.lock);
     dlnode_t * node = tick_q.q.head;
     wdog_t   * wdog = PARENT(node, wdog_t, node);
 
@@ -47,7 +49,7 @@ void wdog_start(wdog_t * wd, usize ticks, void * proc,
     }
 
     dl_insert_before(&tick_q.q, &wd->node, node);
-    irq_spin_give(&tick_q.lock, k);
+    irq_spin_give(&tick_q.lock, key);
 }
 
 void wdog_cancel(wdog_t * wd) {

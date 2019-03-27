@@ -40,15 +40,15 @@ extern __PERCPU u32      no_preempt;
 static inline void preempt_lock  () { thiscpu32_add(&no_preempt, 2); }
 static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 
+extern int  sched_stop  (task_t * tid, u32 state);
+extern int  sched_cont  (task_t * tid, u32 state);
 extern void task_init   (task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
                          void * proc, void * a1, void * a2, void * a3, void * a4);
-extern void task_destroy(task_t * tid);
-extern int  task_stop   (task_t * tid, u32 state);
-extern int  task_cont   (task_t * tid, u32 state);
-extern void task_suspend(task_t * tid);
+extern void task_exit   ();
+extern void task_suspend();
 extern void task_resume (task_t * tid);
-// extern void task_delay  (task_t * tid, int ticks);
-// extern void task_wakeup (task_t * tid);
+extern void task_delay  (int ticks);
+extern void task_wakeup (task_t * tid);
 
 extern __INIT void task_lib_init();
 

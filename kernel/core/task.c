@@ -21,11 +21,89 @@ typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
 
 __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
     ((task_proc_t) proc) (a1, a2, a3, a4);
+    task_exit();
     while (1) {}
 }
 
 //------------------------------------------------------------------------------
-// task creation and destroy
+// low level scheduling, task state switching
+// caller need to lock interrupt, or risk being switched-out
+// caller also need to lock target tid, or might be deleted by others
+// following operations need to be carried out when interrupts locked
+// after unlocking interrupts, call `task_switch` or `smp_reschedule` manually
+
+// add bits to `tid->state`, possibly stopping the task.
+// return ERROR if already stopped.
+// this function only updates `tid`, `ready_q`, and `tid_next` only,
+int sched_stop(task_t * tid, u32 state) {
+    // change state, return if already stopped
+    u32 old_state = tid->state;
+    tid->state |= state;
+    if (TS_READY != old_state) {
+        return ERROR;
+    }
+
+    // lock ready queue of target cpu
+    u32         cpu = tid->cpu_idx;
+    u32         pri = tid->priority;
+    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+    raw_spin_take(&rdy->lock);
+
+    // remove task from ready queue
+    dl_remove(&rdy->q[pri], &tid->node);
+    if ((NULL == rdy->q[pri].head) && (NULL == rdy->q[pri].tail)) {
+        rdy->priorities &= ~(1U << pri);
+    }
+
+    // if the task is running, pick a new one
+    if (tid == percpu_var(cpu, tid_next)) {
+        dbg_assert(0 != rdy->priorities);
+        u32 pri = CTZ32(rdy->priorities);
+        task_t * cand = PARENT(rdy->q[pri].head, task_t, node);
+        percpu_var(cpu, tid_next) = cand;
+    }
+
+    // after this point, `tid_next` might be changed again
+    raw_spin_give(&rdy->lock);
+    return OK;
+}
+
+// remove bits from `tid->state`, possibly resuming the task.
+// return ERROR if already running.
+// this function only updates `tid`, `ready_q`, and `tid_next` only,
+// caller should call `task_switch` or `smp_reschedule` manually.
+int sched_cont(task_t * tid, u32 state) {
+    // change state, return if already running
+    u32 old_state = tid->state;
+    tid->state &= ~state;
+    if ((TS_READY == old_state) || (TS_READY != tid->state)) {
+        return ERROR;
+    }
+
+    // lock ready queue
+    u32         cpu = tid->cpu_idx;
+    u32         pri = tid->priority;
+    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+    raw_spin_take(&rdy->lock);
+
+    // put task back into ready queue
+    rdy->priorities |= 1U << pri;
+    tid->queue = &rdy->q[pri];
+    dl_push_tail(tid->queue, &tid->node);
+
+    // check whether we can preempt
+    task_t * old = percpu_var(cpu, tid_next);
+    if (pri < old->priority) {
+        percpu_var(cpu, tid_next) = tid;
+    }
+
+    // after this point, `tid_next` might be changed again
+    raw_spin_give(&rdy->lock);
+    return OK;
+}
+
+//------------------------------------------------------------------------------
+// task operations
 
 // create new task
 // TODO: kernel stack size should be configurable
@@ -67,127 +145,36 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     wdog_init(&tid->wdog);
 }
 
-// remove a task, mark it as deleted
-void task_destroy(task_t * tid) {
-    dbg_assert(NULL != tid);
-
-    u32 key = int_lock();
-    task_stop(tid, TS_DELETE);
-    int_unlock(key);
-
-    // TODO: register work function to delete TCB
-
-    if (cpu_index() == tid->cpu_idx) {
-        task_switch();
-    } else {
-        smp_reschedule(tid->cpu_idx);
-    }
-}
-
-//------------------------------------------------------------------------------
-// task state switching
-// caller need to lock interrupt, or risk being switched-out
-// caller also need to lock target tid, or might be deleted by others
-// following operations need to be carried out when interrupts locked
-// after unlocking interrupts, call `task_switch` or `smp_reschedule` manually
-
-// add bits to `tid->state`, possibly stopping the task.
-// return ERROR if already stopped.
-// this function only updates `tid`, `ready_q`, and `tid_next` only,
-int task_stop(task_t * tid, u32 state) {
-    // change state, return if already stopped
-    u32 old_state = tid->state;
-    tid->state |= state;
-    if (TS_READY != old_state) {
-        return ERROR;
-    }
-
-    // lock ready queue of target cpu
-    u32         cpu = tid->cpu_idx;
-    u32         pri = tid->priority;
-    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
-    raw_spin_take(&rdy->lock);
-
-    // remove task from ready queue
-    dl_remove(&rdy->q[pri], &tid->node);
-    if ((NULL == rdy->q[pri].head) && (NULL == rdy->q[pri].tail)) {
-        rdy->priorities &= ~(1U << pri);
-    }
-
-    // if the task is running, pick a new one
-    if (tid == percpu_var(cpu, tid_next)) {
-        dbg_assert(0 != rdy->priorities);
-        u32 pri = CTZ32(rdy->priorities);
-        task_t * cand = PARENT(rdy->q[pri].head, task_t, node);
-        percpu_var(cpu, tid_next) = cand;
-    }
-
-    // after this point, `tid_next` might be changed again
-    raw_spin_give(&rdy->lock);
-    return OK;
-}
-
-// remove bits from `tid->state`, possibly resuming the task.
-// return ERROR if already running.
-// this function only updates `tid`, `ready_q`, and `tid_next` only,
-// caller should call `task_switch` or `smp_reschedule` manually.
-int task_cont(task_t * tid, u32 state) {
-    // change state, return if already running
-    u32 old_state = tid->state;
-    tid->state &= ~state;
-    if ((TS_READY == old_state) || (TS_READY != tid->state)) {
-        return ERROR;
-    }
-
-    // lock ready queue
-    u32         cpu = tid->cpu_idx;
-    u32         pri = tid->priority;
-    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
-    raw_spin_take(&rdy->lock);
-
-    // put task back into ready queue
-    rdy->priorities |= 1U << pri;
-    tid->queue = &rdy->q[pri];
-    dl_push_tail(tid->queue, &tid->node);
-
-    // check whether we can preempt
-    task_t * old = percpu_var(cpu, tid_next);
-    if (pri < old->priority) {
-        percpu_var(cpu, tid_next) = tid;
-    }
-
-    // after this point, `tid_next` might be changed again
-    raw_spin_give(&rdy->lock);
-    return OK;
-}
-
-// suspend the task execution
-void task_suspend(task_t * tid) {
-    dbg_assert(NULL != tid);
+// mark current task as deleted
+void task_exit() {
+    task_t * tid = thiscpu_var(tid_prev);
 
     u32 key = irq_spin_take(&tid->lock);
-    u32 cpu = tid->cpu_idx;
-    int ret = task_stop(tid, TS_SUSPEND);
+    sched_stop(tid, TS_DELETE);
     irq_spin_give(&tid->lock, key);
 
-    if (ERROR == ret) {
-        return;
-    }
-
-    if (cpu_index() == cpu) {
-        task_switch();
-    } else {
-        smp_reschedule(cpu);
-    }
+    // TODO: register work function to delete TCB
+    task_switch();
 }
 
-// resume the execution of a task
+// suspend current task
+void task_suspend() {
+    task_t * tid = thiscpu_var(tid_prev);
+
+    u32 key = irq_spin_take(&tid->lock);
+    sched_stop(tid, TS_SUSPEND);
+    irq_spin_give(&tid->lock, key);
+
+    task_switch();
+}
+
+// resume the execution of a suspended task
 void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
 
     u32 key = irq_spin_take(&tid->lock);
     u32 cpu = tid->cpu_idx;
-    int ret = task_cont(tid, TS_SUSPEND);
+    int ret = sched_cont(tid, TS_SUSPEND);
     irq_spin_give(&tid->lock, key);
 
     if (ERROR == ret) {
@@ -201,28 +188,36 @@ void task_resume(task_t * tid) {
     }
 }
 
-// // put the task into sleep for a few ticks
-// void task_delay(task_t * tid, int ticks) {
-//     dbg_assert(NULL != tid);
+void task_delay(int ticks) {
+    task_t * tid = thiscpu_var(tid_prev);
 
-//     u32 key = irq_spin_take(&tid->lock);
-//     task_stop(tid, TS_DELAY);
-//     wdog_cancel(&tid->wdog);
-//     wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
-//     irq_spin_give(&tid->lock, key);
+    u32 key = irq_spin_take(&tid->lock);
+    sched_stop(tid, TS_DELAY);
+    wdog_cancel(&tid->wdog);
+    wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
+    irq_spin_give(&tid->lock, key);
 
-//     if (cpu_index() == tid->cpu_idx) {
-//         task_switch();
-//     } else {
-//         smp_reschedule(tid->cpu_idx);
-//     }
-// }
+    task_switch();
+}
 
-// void task_wakeup(task_t * tid) {
-//     u32 key = irq_spin_take(&tid->lock);
-//     task_cont(tid, TS_DELAY);
-//     irq_spin_give(&tid->lock, key);
-// }
+void task_wakeup(task_t * tid) {
+    dbg_assert(NULL != tid);
+
+    u32 key = irq_spin_take(&tid->lock);
+    u32 cpu = tid->cpu_idx;
+    int ret = sched_cont(tid, TS_DELAY);
+    irq_spin_give(&tid->lock, key);
+
+    if (ERROR == ret) {
+        return;
+    }
+
+    if (cpu_index() == cpu) {
+        task_switch();
+    } else {
+        smp_reschedule(cpu);
+    }
+}
 
 //------------------------------------------------------------------------------
 // module setup

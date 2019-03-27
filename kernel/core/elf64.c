@@ -129,6 +129,11 @@ usize elf64_parse(u8 * buf, usize len) {
         usize vm_start = ROUND_DOWN(phdr->p_vaddr, PAGE_SIZE);
         usize vm_end   = ROUND_UP(phdr->p_vaddr + phdr->p_memsz, PAGE_SIZE);
         vmrange_t * range = vmspace_alloc_at(vm, vm_start, vm_end - vm_start);
+        if (NULL != range) {
+            dbg_print("-- !!<range not available>!!\r\n");
+            return 0;
+        }
+
         dbg_print("-- LOAD to 0x%llx, size 0x%x, attr %u.\r\n",
                   phdr->p_vaddr, phdr->p_memsz, phdr->p_flags);
         elf64_load_segment(buf + phdr->p_offset, phdr);

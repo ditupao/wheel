@@ -8,7 +8,7 @@ typedef int (* wdog_proc_t) (void * a1, void * a2, void * a3, void * a4);
 
 typedef struct wdog {
     dlnode_t    node;
-    usize       ticks;
+    int         ticks;
     wdog_proc_t proc;
     void *      arg1;
     void *      arg2;

@@ -14,85 +14,98 @@ void semaphore_init(semaphore_t * sem, int limit, int count) {
     sem->pend_q = DLLIST_INIT;
 }
 
+// resume all pending tasks on this semaphore
 void semaphore_destroy(semaphore_t * sem) {
     u32 key = irq_spin_take(&sem->lock);
 
     for (dlnode_t * dl = sem->pend_q.head; NULL != dl; dl = dl->next) {
         task_t * tid = PARENT(dl, task_t, node);
+        u32      cpu = tid->cpu_idx;
 
         raw_spin_take(&tid->lock);
+        sched_cont(tid, TS_PEND);
         tid->ret_val = ERROR;
-        task_cont(tid, TS_PEND);
         raw_spin_give(&tid->lock);
+
+        if (cpu_index() != cpu) {
+            smp_reschedule(cpu);
+        }
     }
+
+    irq_spin_give(&sem->lock, key);
+    task_switch();
 }
 
 // executed in ISR
-static void semaphore_timeout(task_t * tid, semaphore_t * sem) {
-    u32 key = irq_spin_take(&tid->lock);
-    raw_spin_take(&sem->lock);
+static void semaphore_timeout(semaphore_t * sem, task_t * tid) {
+    u32 key = irq_spin_take(&sem->lock);
+    raw_spin_take(&tid->lock);
 
-    task_cont(tid, TS_PEND);
+    sched_cont(tid, TS_PEND);
     dl_remove(&sem->pend_q, &tid->node);
 
-    raw_spin_give(&sem->lock);
-    irq_spin_give(&tid->lock, key);
+    raw_spin_give(&tid->lock);
+    irq_spin_give(&sem->lock, key);
 
     // we're running in ISR, no need to `task_switch()`
 }
 
 // return OK if successfully taken the semaphore
 // return ERROR if failed (might block)
+// this function cannot be called inside ISR
 int semaphore_take(semaphore_t * sem, int timeout) {
-    task_t * tid = thiscpu_var(tid_prev);
-    u32 key = irq_spin_take(&tid->lock);
-    raw_spin_take(&sem->lock);
+    u32 key = irq_spin_take(&sem->lock);
+
     if (sem->count) {
         --sem->count;
-        raw_spin_give(&sem->lock);
-        irq_spin_give(&tid->lock, key);
+        irq_spin_give(&sem->lock, key);
         return OK;
     } else {
         // resource not available, pend current task
+        task_t * tid = thiscpu_var(tid_prev);
+        raw_spin_take(&tid->lock);
+
+        sched_stop(tid, TS_PEND);
         tid->ret_val = OK;
-        task_stop(tid, TS_PEND);
-        // TODO: priority-based or FIFO?
-        dl_push_tail(&sem->pend_q, &tid->node);
+        dl_push_tail(&sem->pend_q, &tid->node);     // TODO: priority-based or FIFO?
         tid->queue = &sem->pend_q;
 
         // create timeout watchdog
-        if (0 != timeout) {
+        if (SEM_WAIT_FOREVER != timeout) {
             wdog_cancel(&tid->wdog);
-            wdog_start(&tid->wdog, timeout, semaphore_timeout, tid, sem, 0,0);
+            wdog_start(&tid->wdog, timeout, semaphore_timeout, sem, tid, 0,0);
         }
 
-        // hand over control to other task
-        raw_spin_give(&sem->lock);
-        irq_spin_give(&tid->lock, key);
-        task_switch();
+        // release locks
+        raw_spin_give(&tid->lock);
+        irq_spin_give(&sem->lock, key);
 
-        // return value set by others
-        return tid->ret_val;
+        task_switch();              // sleep until resource becomes available
+        wdog_cancel(&tid->wdog);    // stop the timeout watchdog for safety
+        return tid->ret_val;        // return value set bt prev lock holder
     }
 }
 
+// this function can be called inside ISR
 int semaphore_trytake(semaphore_t * sem) {
     task_t * tid = thiscpu_var(tid_prev);
-    u32 key = irq_spin_take(&tid->lock);
-    raw_spin_take(&sem->lock);
+
+    u32 key = irq_spin_take(&sem->lock);
+    raw_spin_take(&tid->lock);
 
     if (sem->count) {
         --sem->count;
-        raw_spin_give(&sem->lock);
-        irq_spin_give(&tid->lock, key);
+        raw_spin_give(&tid->lock);
+        irq_spin_give(&sem->lock, key);
         return OK;
     }
 
-    raw_spin_give(&sem->lock);
-    irq_spin_give(&tid->lock, key);
+    raw_spin_give(&tid->lock);
+    irq_spin_give(&sem->lock, key);
     return ERROR;
 }
 
+// this function can be called inside ISR
 void semaphore_give(semaphore_t * sem) {
     u32 key = irq_spin_take(&sem->lock);
 
@@ -108,8 +121,7 @@ void semaphore_give(semaphore_t * sem) {
     task_t * tid = PARENT(dl, task_t, node);
     u32      cpu = tid->cpu_idx;
     raw_spin_take(&tid->lock);
-
-    task_cont(tid, TS_PEND);
+    sched_cont(tid, TS_PEND);
     raw_spin_give(&tid->lock);
     irq_spin_give(&sem->lock, key);
 

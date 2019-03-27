@@ -258,7 +258,7 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 // post-kernel initialization
 
 // defined in tick.c
-extern u64 tick_count;
+// extern u64 tick_count;
 static int fire_count = 0;
 
 static void wd_cb() {
@@ -316,11 +316,13 @@ static void root_proc() {
     }
 #endif
 
-    wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
+    // wdog_start(&wd_tst, 2, wd_cb, 0,0,0,0);
 
     while (1) {
-        int ret = semaphore_take(&sem_tst, 0);
-        dbg_print("<%d:%x>", ret, tick_count);
+        // int ret = semaphore_take(&sem_tst, 0);
+        // dbg_print("<%d:%x>", ret, fire_count);
+        dbg_print("HA");
+        task_delay(5);
     }
 }
 

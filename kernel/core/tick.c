@@ -6,7 +6,7 @@ typedef struct tick_q {
 } tick_q_t;
 
 static tick_q_t tick_q;
-u64 tick_count;
+static usize    tick_count;
 
 void wdog_init(wdog_t * wd) {
     memset(wd, 0, sizeof(wdog_t));
@@ -70,7 +70,7 @@ void wdog_cancel(wdog_t * wd) {
 void tick_advance() {
     if (0 == cpu_index()) {
         dbg_print("~");
-        atomic64_inc(&tick_count);
+        atomic_inc((atomic_t *) &tick_count);
 
         u32 k = irq_spin_take(&tick_q.lock);
         dlnode_t * node = tick_q.q.head;

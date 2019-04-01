@@ -41,8 +41,10 @@ static void semaphore_timeout(semaphore_t * sem, task_t * tid) {
     u32 key = irq_spin_take(&sem->lock);
     raw_spin_take(&tid->lock);
 
-    sched_cont(tid, TS_PEND);
-    dl_remove(&sem->pend_q, &tid->node);
+    // check whether task is pending
+    if (OK == sched_cont(tid, TS_PEND)) {
+        dl_remove(&sem->pend_q, &tid->node);
+    }
 
     raw_spin_give(&tid->lock);
     irq_spin_give(&sem->lock, key);
@@ -60,30 +62,35 @@ int semaphore_take(semaphore_t * sem, int timeout) {
         --sem->count;
         irq_spin_give(&sem->lock, key);
         return OK;
-    } else {
-        // resource not available, pend current task
-        task_t * tid = thiscpu_var(tid_prev);
-        raw_spin_take(&tid->lock);
-
-        sched_stop(tid, TS_PEND);
-        tid->ret_val = OK;
-        dl_push_tail(&sem->pend_q, &tid->node);     // TODO: priority-based or FIFO?
-        tid->queue = &sem->pend_q;
-
-        // create timeout watchdog
-        if (SEM_WAIT_FOREVER != timeout) {
-            wdog_cancel(&tid->wdog);
-            wdog_start(&tid->wdog, timeout, semaphore_timeout, sem, tid, 0,0);
-        }
-
-        // release locks
-        raw_spin_give(&tid->lock);
-        irq_spin_give(&sem->lock, key);
-
-        task_switch();              // sleep until resource becomes available
-        wdog_cancel(&tid->wdog);    // stop the timeout watchdog for safety
-        return tid->ret_val;        // return value set bt prev lock holder
     }
+
+    // resource not available, pend current task
+    task_t * tid = thiscpu_var(tid_prev);
+    raw_spin_take(&tid->lock);
+
+    sched_stop(tid, TS_PEND);
+    tid->ret_val = OK;
+    dl_push_tail(&sem->pend_q, &tid->node);     // TODO: priority-based or FIFO?
+    tid->queue = &sem->pend_q;
+
+    wdog_t wd;
+    wdog_init(&wd);
+
+    // create timeout watchdog
+    if (SEM_WAIT_FOREVER != timeout) {
+        wdog_start(&wd, timeout, semaphore_timeout, sem, tid, 0,0);
+    }
+
+    // release locks
+    raw_spin_give(&tid->lock);
+    irq_spin_give(&sem->lock, key);
+
+    // pend here
+    task_switch();
+
+    // remove wdog and retrive return value
+    wdog_cancel(&wd);
+    return tid->ret_val;
 }
 
 // this function can be called inside ISR

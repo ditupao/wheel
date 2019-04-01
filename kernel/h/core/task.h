@@ -17,7 +17,7 @@ typedef struct task {
     dlnode_t    node;           // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
     process_t * pid;            // container process
-    wdog_t      wdog;           // used for delay and timeout
+    // wdog_t      wdog;           // used for delay and timeout
 } task_t;
 
 // 32 priorities at momst, so we can use `u32` as priority bitmask

@@ -142,7 +142,7 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     tid->node     = DLNODE_INIT;
     tid->queue    = NULL;
     tid->pid      = pid;
-    wdog_init(&tid->wdog);
+    // wdog_init(&tid->wdog);
 }
 
 // mark current task as deleted
@@ -188,16 +188,30 @@ void task_resume(task_t * tid) {
     }
 }
 
-void task_delay(int ticks) {
-    task_t * tid = thiscpu_var(tid_prev);
+// void task_delay(int ticks) {
+//     task_t * tid = thiscpu_var(tid_prev);
 
-    u32 key = irq_spin_take(&tid->lock);
+//     u32 key = irq_spin_take(&tid->lock);
+//     sched_stop(tid, TS_DELAY);
+//     wdog_cancel(&tid->wdog);
+//     wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
+//     irq_spin_give(&tid->lock, key);
+
+//     task_switch();
+// }
+
+void task_delay(int ticks) {
+    wdog_t   wd;
+    task_t * tid = thiscpu_var(tid_prev);
+    u32      key = irq_spin_take(&tid->lock);
+
+    wdog_init(&wd);
     sched_stop(tid, TS_DELAY);
-    wdog_cancel(&tid->wdog);
-    wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
+    wdog_start(&wd, ticks, task_wakeup, tid, 0,0,0);
     irq_spin_give(&tid->lock, key);
 
     task_switch();
+    wdog_cancel(&wd);
 }
 
 void task_wakeup(task_t * tid) {

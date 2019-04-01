@@ -14,9 +14,9 @@ void wdog_init(wdog_t * wd) {
     wd->node.next = &wd->node;
 }
 
-void wdog_destroy(wdog_t * wd) {
-    wdog_cancel(wd);
-}
+// void wdog_destroy(wdog_t * wd) {
+//     wdog_cancel(wd);
+// }
 
 void wdog_start(wdog_t * wd, int ticks, void * proc,
                 void * a1, void * a2, void * a3, void * a4) {

@@ -73,7 +73,7 @@ void rb_link_node(rbnode_t * node, rbnode_t * parent, rbnode_t ** link) {
 }
 
 // keep red-black properties after inserting a new node
-void rb_insert_fixup(rbnode_t * node, rbtree_t * tree) {
+void rb_insert_fixup(rbtree_t * tree, rbnode_t * node) {
     rbnode_t * parent, * gparent, * uncle;
     while ((parent = RB_PARENT(node)) && (RB_RED == RB_COLOR(parent))) {
         gparent = RB_PARENT(parent);
@@ -119,7 +119,7 @@ void rb_insert_fixup(rbnode_t * node, rbtree_t * tree) {
 }
 
 // keep red-black properties after erasing a node
-static void rb_erase_fixup(rbnode_t * node, rbnode_t * parent, rbtree_t * tree) {
+static void rb_erase_fixup(rbtree_t * tree, rbnode_t * node, rbnode_t * parent) {
     rbnode_t * other;
     while ((!node || (RB_BLACK == RB_COLOR(node))) && (node != tree->root)) {
         if (node == parent->left) {
@@ -183,7 +183,7 @@ static void rb_erase_fixup(rbnode_t * node, rbnode_t * parent, rbtree_t * tree) 
     }
 }
 
-void rb_erase(rbnode_t * node, rbtree_t * tree) {
+void rb_erase(rbtree_t * tree, rbnode_t * node) {
     rbnode_t * child = NULL;
     rbnode_t * parent;
     usize      color;
@@ -251,11 +251,11 @@ void rb_erase(rbnode_t * node, rbtree_t * tree) {
 
 color:
     if (RB_BLACK == color) {
-        rb_erase_fixup(child, parent, tree);
+        rb_erase_fixup(tree, child, parent);
     }
 }
 
-void rb_replace(rbnode_t * victim, rbnode_t * node, rbtree_t * tree) {
+void rb_replace(rbtree_t * tree, rbnode_t * victim, rbnode_t * node) {
     // modify parent node
     rbnode_t * parent = RB_PARENT(victim);
     if (NULL == parent) {

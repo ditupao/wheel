@@ -19,7 +19,7 @@ void semaphore_destroy(semaphore_t * sem) {
     u32 key = irq_spin_take(&sem->lock);
 
     for (dlnode_t * dl = sem->pend_q.head; NULL != dl; dl = dl->next) {
-        task_t * tid = PARENT(dl, task_t, node);
+        task_t * tid = PARENT(dl, task_t, dl_sched);
         u32      cpu = tid->cpu_idx;
 
         raw_spin_take(&tid->lock);
@@ -43,7 +43,7 @@ static void semaphore_timeout(semaphore_t * sem, task_t * tid) {
 
     // check whether task is pending
     if (OK == sched_cont(tid, TS_PEND)) {
-        dl_remove(&sem->pend_q, &tid->node);
+        dl_remove(&sem->pend_q, &tid->dl_sched);
     }
 
     raw_spin_give(&tid->lock);
@@ -70,7 +70,7 @@ int semaphore_take(semaphore_t * sem, int timeout) {
 
     sched_stop(tid, TS_PEND);
     tid->ret_val = OK;
-    dl_push_tail(&sem->pend_q, &tid->node);     // TODO: priority-based or FIFO?
+    dl_push_tail(&sem->pend_q, &tid->dl_sched); // TODO: priority-based or FIFO?
     tid->queue = &sem->pend_q;
 
     wdog_t wd;
@@ -88,7 +88,10 @@ int semaphore_take(semaphore_t * sem, int timeout) {
     // pend here
     task_switch();
 
-    // remove wdog and retrive return value
+    // possible reasons for unpending:
+    // - successfully taken the semaphore
+    // - semaphore got destroyed
+    // - timeout
     wdog_cancel(&wd);
     return tid->ret_val;
 }
@@ -125,7 +128,7 @@ void semaphore_give(semaphore_t * sem) {
         return;
     }
 
-    task_t * tid = PARENT(dl, task_t, node);
+    task_t * tid = PARENT(dl, task_t, dl_sched);
     u32      cpu = tid->cpu_idx;
     raw_spin_take(&tid->lock);
     sched_cont(tid, TS_PEND);

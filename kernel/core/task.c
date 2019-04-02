@@ -50,7 +50,7 @@ int sched_stop(task_t * tid, u32 state) {
     raw_spin_take(&rdy->lock);
 
     // remove task from ready queue
-    dl_remove(&rdy->q[pri], &tid->node);
+    dl_remove(&rdy->q[pri], &tid->dl_sched);
     if ((NULL == rdy->q[pri].head) && (NULL == rdy->q[pri].tail)) {
         rdy->priorities &= ~(1U << pri);
     }
@@ -59,7 +59,7 @@ int sched_stop(task_t * tid, u32 state) {
     if (tid == percpu_var(cpu, tid_next)) {
         dbg_assert(0 != rdy->priorities);
         u32 pri = CTZ32(rdy->priorities);
-        task_t * cand = PARENT(rdy->q[pri].head, task_t, node);
+        task_t * cand = PARENT(rdy->q[pri].head, task_t, dl_sched);
         percpu_var(cpu, tid_next) = cand;
     }
 
@@ -89,7 +89,7 @@ int sched_cont(task_t * tid, u32 state) {
     // put task back into ready queue
     rdy->priorities |= 1U << pri;
     tid->queue = &rdy->q[pri];
-    dl_push_tail(tid->queue, &tid->node);
+    dl_push_tail(tid->queue, &tid->dl_sched);
 
     // check whether we can preempt
     task_t * old = percpu_var(cpu, tid_next);
@@ -128,7 +128,7 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     page_array[pn].block = 1;
     page_array[pn].order = 4;
     page_array[pn].next  = NO_PAGE;
-    pid->first_page = pn;
+    pid->pages = pn;
 
     usize va = (usize) phys_to_virt((usize) pn << PAGE_SHIFT);
     regs_init(&tid->regs, pid->ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
@@ -138,11 +138,13 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     tid->ret_val  = 0;
     tid->priority = priority;
     tid->cpu_idx  = cpu_idx;
-    // tid->stack    = pn;
-    tid->node     = DLNODE_INIT;
+    tid->dl_sched = DLNODE_INIT;
     tid->queue    = NULL;
-    tid->pid      = pid;
-    // wdog_init(&tid->wdog);
+    tid->dl_proc  = DLNODE_INIT;
+    tid->process  = pid;
+
+    // put the task into process
+    dl_push_tail(&pid->tasks, &tid->dl_proc);
 }
 
 // mark current task as deleted

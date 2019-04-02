@@ -8,20 +8,19 @@
 
 typedef struct task {
     regs_t      regs;           // arch-specific status
-    spin_t      lock;
-    u32         state;
-    int         ret_val;        // return value from PEND
+    spin_t      lock;           // spinlock used in state-switching
+    u32         state;          // task state
+    int         ret_val;        // return code from PEND state
     u32         priority;       // must < PRIORITY_COUNT
     u32         cpu_idx;        // must < cpu_installed
-    // pfn_t       stack;          // this is kernel stack
-    dlnode_t    node;           // node in ready_q/pend_q
+    dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
-    process_t * pid;            // container process
-    // wdog_t      wdog;           // used for delay and timeout
+    dlnode_t    dl_proc;        // node in process
+    process_t * process;        // current process
 } task_t;
 
-// 32 priorities at momst, so we can use `u32` as priority bitmask
-#define PRIORITY_COUNT  32
+// task priorities
+#define PRIORITY_COUNT  32      // we use `u32` as priority bitmask
 #define PRIORITY_IDLE   31      // lowest priority = idle
 #define PRIORITY_NONRT  30      // 2nd lowest priority = non-real-time
 

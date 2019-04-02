@@ -71,9 +71,7 @@ void elf64_load_segment(u8 * data, elf64_phdr_t * seg) {
     memset((u8 *) seg->p_vaddr + seg->p_filesz, 0, seg->p_memsz - seg->p_filesz);
 }
 
-// parse and load an elf file
-// we need to keep a handle of each ELF loaded
-// so that we can free all pages allocated for it.
+// parse and load an elf file into the context of current process
 usize elf64_parse(u8 * buf, usize len) {
     // retrieve and verify elf header
     elf64_hdr_t * hdr = (elf64_hdr_t *) buf;
@@ -102,7 +100,7 @@ usize elf64_parse(u8 * buf, usize len) {
         return 0;
     }
 
-    vmspace_t * vm = &(thiscpu_var(tid_prev)->pid->vmspace);
+    vmspace_t * vm = &(thiscpu_var(tid_prev)->process->vmspace);
 
     // make sure address space is valid
     for (int i = 0; i < hdr->e_phnum; ++i) {
@@ -225,4 +223,14 @@ usize elf64_parse(u8 * buf, usize len) {
 
     dbg_print("object parsing ok.\r\n");
     return OK;
+}
+
+
+// load an elf file into the context of current process
+// and start executing the code in it (current task)
+void elf64_load_and_run(u8 * elf, usize len) {
+    // parse elf file
+    // load each segment into memory, and manage vmspace
+    // (relocation)
+    // switch to ring3 at the entry point
 }

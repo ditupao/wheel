@@ -5,18 +5,15 @@ typedef struct tick_q {
     dllist_t q;
 } tick_q_t;
 
-static tick_q_t tick_q;
-static usize    tick_count;
+// make tick_q cpu local?
+static          tick_q_t tick_q;
+static volatile usize    tick_count;
 
 void wdog_init(wdog_t * wd) {
     memset(wd, 0, sizeof(wdog_t));
     wd->node.prev = &wd->node;
     wd->node.next = &wd->node;
 }
-
-// void wdog_destroy(wdog_t * wd) {
-//     wdog_cancel(wd);
-// }
 
 void wdog_start(wdog_t * wd, int ticks, void * proc,
                 void * a1, void * a2, void * a3, void * a4) {
@@ -70,7 +67,6 @@ void wdog_cancel(wdog_t * wd) {
 // clock interrupt handler
 void tick_advance() {
     if (0 == cpu_index()) {
-        // dbg_print("~");
         atomic_inc((atomic_t *) &tick_count);
 
         u32 k = irq_spin_take(&tick_q.lock);
@@ -99,9 +95,15 @@ void tick_advance() {
     task_t * tid = thiscpu_var(tid_prev);
     --tid->ticks;
     if ((tid->priority == PRIORITY_NONRT) && (tid->ticks <= 0)) {
-        tid->ticks = 2000;
-        dbg_print("->");
+        tid->ticks = 1000;
         task_yield();
+    }
+}
+
+void tick_delay(int ticks) {
+    usize start = tick_count;
+    while ((tick_count - start) < (usize) ticks) {
+        cpu_relax();
     }
 }
 

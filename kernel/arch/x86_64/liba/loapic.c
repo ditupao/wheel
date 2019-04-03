@@ -70,7 +70,7 @@ typedef struct loapic {
 
 static u64  loapic_addr   = 0;
 static u8 * loapic_base   = 0;
-static int  loapic_tmr_hz = 0;  // how many cycles in a second
+static u32  loapic_tmr_hz = 0;  // how many cycles in a second
 
 static loapic_t loapic_devs[MAX_CPU_COUNT];
 
@@ -113,16 +113,12 @@ void loapic_send_eoi() {
     write32(loapic_base + LOAPIC_EOI, 0);
 }
 
-void loapic_timer_busywait(int ms) {
-    int delta = ms * (loapic_tmr_hz / 1000);
-    int start = read32(loapic_base + LOAPIC_CCR);
-    int end   = start - delta;
-    while (end < 0) {
-        while ((int) read32(loapic_base + LOAPIC_CCR) < start) {}
-        end += loapic_tmr_hz;
-    }
-    while ((int) read32(loapic_base + LOAPIC_CCR) >= end) {}
-}
+// void loapic_timer_busywait(int ticks) {
+//     for (int i = 0; i < ticks; ++i) {
+//         while (read32(loapic_base + LOAPIC_CCR) > (loapic_tmr_hz / 2000)) {}
+//         while (read32(loapic_base + LOAPIC_CCR) < (loapic_tmr_hz / 2000)) {}
+//     }
+// }
 
 void loapic_emit_ipi(u32 cpu, u32 vec) {
     u32 icr_hi = ((u32) loapic_devs[cpu].apic_id << 24) & 0xff000000;

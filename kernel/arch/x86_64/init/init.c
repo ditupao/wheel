@@ -126,6 +126,7 @@ wdog_t      wd_tst;
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // enable early debug output
     serial_dev_init();
+    console_dev_init();
     dbg_print("wheel operating system starting up.\r\n");
 
     // backup multiboot info
@@ -264,7 +265,7 @@ task_t tcb_a;
 task_t tcb_b;
 
 static void root_proc() {
-    console_dev_init();
+    // console_dev_init();
     dbg_print("processor 00 running.\r\n");
 
     // copy trampoline code
@@ -276,11 +277,11 @@ static void root_proc() {
     // start application processors one-by-one
     while (cpu_activated < cpu_installed) {
         u32 idx = cpu_activated;
-        loapic_emit_init(idx);       loapic_timer_busywait(10); // INIT+10ms
-        loapic_emit_sipi(idx, 0x7c); loapic_timer_busywait(1);  // SIPI+1ms
-        loapic_emit_sipi(idx, 0x7c); loapic_timer_busywait(1);  // SIPI+1ms
+        loapic_emit_init(idx);       tick_delay(10);    // INIT+10ms
+        loapic_emit_sipi(idx, 0x7c); tick_delay(1);     // SIPI+1ms
+        loapic_emit_sipi(idx, 0x7c); tick_delay(1);     // SIPI+1ms
         while (percpu_var(idx, tid_prev) != percpu_ptr(idx, idle_tcb)) {
-            loapic_timer_busywait(10);
+            tick_delay(10);
         }
     }
 
@@ -310,21 +311,21 @@ static void root_proc() {
 }
 
 static void task_a_proc() {
+    int i = 0;
     while (1) {
-        dbg_print("A");
-        for (int i = 0; i < 100; ++i) {
-            loapic_timer_busywait(500);
-        }
+        dbg_print("^%x", i++);
+        // loapic_timer_busywait(150);
+        tick_delay(150);
         // task_delay(100);
     }
 }
 
 static void task_b_proc() {
+    int i = 0;
     while (1) {
-        dbg_print("B");
-        for (int i = 0; i < 100; ++i) {
-            loapic_timer_busywait(700);
-        }
+        dbg_print("=%d", i++);
+        // loapic_timer_busywait(200);
+        tick_delay(200);
         // task_delay(80);
     }
 }

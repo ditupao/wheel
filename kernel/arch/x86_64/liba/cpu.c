@@ -114,14 +114,14 @@ __INIT void cpu_init() {
     cr0 |=  (1UL << 16);        // cr0.WP: enable write protection
     write_cr0(cr0);
 
-    u64 cr4 = read_cr4();
-    cr4 |= (1UL << 16);         // FSGSBASE, enable wrfsbase/wrgsbase in ring3
-    write_cr4(cr4);
+    // u64 cr4 = read_cr4();
+    // cr4 |= (1UL << 16);         // FSGSBASE, enable wrfsbase/wrgsbase in ring3
+    // write_cr4(cr4);
 
     // enable No-Execute bit in page entries
     u64 efer = read_msr(0xc0000080);
     efer |= (1UL << 11);        // no-execute mode enable
-    efer |= (1UL << 14);        // fast fxsave/fxrstor
+    // efer |= (1UL << 14);        // fast fxsave/fxrstor
     write_msr(0xc0000080, efer);
 }
 

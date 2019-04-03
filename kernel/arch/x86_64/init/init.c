@@ -257,6 +257,12 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
+static void task_a_proc();
+static void task_b_proc();
+
+task_t tcb_a;
+task_t tcb_b;
+
 static void root_proc() {
     console_dev_init();
     dbg_print("processor 00 running.\r\n");
@@ -295,9 +301,31 @@ static void root_proc() {
     }
 #endif
 
+    task_init(&tcb_a, &init_pcb, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
+    task_init(&tcb_b, &init_pcb, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
+    task_resume(&tcb_a);
+    task_resume(&tcb_b);
+
+    while (1) {}
+}
+
+static void task_a_proc() {
     while (1) {
-        dbg_print("HA");
-        task_delay(5);
+        dbg_print("A");
+        for (int i = 0; i < 100; ++i) {
+            loapic_timer_busywait(500);
+        }
+        // task_delay(100);
+    }
+}
+
+static void task_b_proc() {
+    while (1) {
+        dbg_print("B");
+        for (int i = 0; i < 100; ++i) {
+            loapic_timer_busywait(700);
+        }
+        // task_delay(80);
     }
 }
 

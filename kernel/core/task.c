@@ -138,6 +138,7 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     tid->ret_val  = 0;
     tid->priority = priority;
     tid->cpu_idx  = cpu_idx;
+    tid->ticks    = 0;
     tid->dl_sched = DLNODE_INIT;
     tid->queue    = NULL;
     tid->dl_proc  = DLNODE_INIT;
@@ -156,6 +157,28 @@ void task_exit() {
     irq_spin_give(&tid->lock, key);
 
     // TODO: register work function to delete TCB
+    task_switch();
+}
+
+// this function might be called during tick_advance
+// task state not changed, no need to lock current tid
+void task_yield() {
+    task_t    * tid = thiscpu_var(tid_prev);
+    u32         cpu = tid->cpu_idx;
+    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+
+    u32 key = irq_spin_take(&rdy->lock);
+
+    dl_remove(tid->queue, &tid->dl_sched);
+    dl_push_tail(tid->queue, &tid->dl_sched);
+
+    dbg_assert(0 != rdy->priorities);
+    u32 pri = CTZ32(rdy->priorities);
+    task_t * cand = PARENT(rdy->q[pri].head, task_t, dl_sched);
+    percpu_var(cpu, tid_next) = cand;
+
+    irq_spin_give(&rdy->lock, key);
+
     task_switch();
 }
 

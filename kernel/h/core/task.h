@@ -13,6 +13,7 @@ typedef struct task {
     int         ret_val;        // return code from PEND state
     u32         priority;       // must < PRIORITY_COUNT
     u32         cpu_idx;        // must < cpu_installed
+    isize       ticks;          // only for PRIORITY_NONRT
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
     dlnode_t    dl_proc;        // node in process
@@ -44,6 +45,7 @@ extern int  sched_cont  (task_t * tid, u32 state);
 extern void task_init   (task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
                          void * proc, void * a1, void * a2, void * a3, void * a4);
 extern void task_exit   ();
+extern void task_yield  ();
 extern void task_suspend();
 extern void task_resume (task_t * tid);
 extern void task_delay  (int ticks);

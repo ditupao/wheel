@@ -68,9 +68,9 @@ typedef struct loapic {
     u8 processor_id;
 } loapic_t;
 
-static u64  loapic_addr    = 0;
-static u8 * loapic_base    = 0;
-static int  loapic_tmr_icr = 0;
+static u64  loapic_addr   = 0;
+static u8 * loapic_base   = 0;
+static int  loapic_tmr_hz = 0;  // how many cycles in a second
 
 static loapic_t loapic_devs[MAX_CPU_COUNT];
 
@@ -114,12 +114,12 @@ void loapic_send_eoi() {
 }
 
 void loapic_timer_busywait(int ms) {
-    int delta = ms * (loapic_tmr_icr / 1000);
+    int delta = ms * (loapic_tmr_hz / 1000);
     int start = read32(loapic_base + LOAPIC_CCR);
     int end   = start - delta;
     while (end < 0) {
         while ((int) read32(loapic_base + LOAPIC_CCR) < start) {}
-        end += loapic_tmr_icr;
+        end += loapic_tmr_hz;
     }
     while ((int) read32(loapic_base + LOAPIC_CCR) >= end) {}
 }
@@ -220,18 +220,19 @@ __INIT void loapic_dev_init() {
     write32(loapic_base + LOAPIC_EOI, 0);
 
     // set default isr functions
-    if (0 == loapic_tmr_icr) {
+    if (0 == loapic_tmr_hz) {
         isr_tbl[VECNUM_RESCHED]  = (isr_proc_t) loapic_resched_proc;
         isr_tbl[VECNUM_FLUSHMMU] = (isr_proc_t) loapic_flushmmu_proc;
         isr_tbl[VECNUM_SPURIOUS] = (isr_proc_t) loapic_svr_proc;
         isr_tbl[VECNUM_TIMER]    = (isr_proc_t) loapic_timer_proc;
-        loapic_tmr_icr = calibrate_freq() / 5;      // freq = 5Hz
+        loapic_tmr_hz = calibrate_freq();
     }
 
     // start the timer
+    // TODO: set system frequency in conf header
     write32(loapic_base + LOAPIC_TIMER, LOAPIC_PERIODIC | VECNUM_TIMER);
     write32(loapic_base + LOAPIC_CFG, 0x0b);
-    write32(loapic_base + LOAPIC_ICR, loapic_tmr_icr);
+    write32(loapic_base + LOAPIC_ICR, loapic_tmr_hz / 1000);
 }
 
 // send init IPI to the target cpu

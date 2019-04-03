@@ -67,9 +67,10 @@ void wdog_cancel(wdog_t * wd) {
     irq_spin_give(&tick_q.lock, key);
 }
 
+// clock interrupt handler
 void tick_advance() {
     if (0 == cpu_index()) {
-        dbg_print("~");
+        // dbg_print("~");
         atomic_inc((atomic_t *) &tick_count);
 
         u32 k = irq_spin_take(&tick_q.lock);
@@ -93,6 +94,14 @@ void tick_advance() {
         }
 
         irq_spin_give(&tick_q.lock, k);
+    }
+
+    task_t * tid = thiscpu_var(tid_prev);
+    --tid->ticks;
+    if ((tid->priority == PRIORITY_NONRT) && (tid->ticks <= 0)) {
+        tid->ticks = 2000;
+        dbg_print("->");
+        task_yield();
     }
 }
 

@@ -3,6 +3,7 @@
 static pool_t range_pool;
 
 void vmspace_init(vmspace_t * space) {
+    space->ctx    = mmu_ctx_create();
     space->ranges = DLLIST_INIT;
     vmspace_add_free(space, USER_START, USER_END - USER_START);
 }
@@ -11,6 +12,7 @@ void vmspace_destroy(vmspace_t * space) {
     dlnode_t * dl;
     while (NULL != (dl = dl_pop_head(&space->ranges))) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
+        vmrange_unmap(range);
         pool_obj_free(&range_pool, range);
     }
 }
@@ -20,7 +22,7 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
 
-    // search addr_list, looking for the first range after the new resion
+    // search addr_list, looking for the first range after the new region
     dlnode_t  * dl   = space->ranges.head;
     vmrange_t * prev = NULL;
     vmrange_t * next = NULL;
@@ -30,7 +32,7 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
             // this is the next range
             break;
         }
-        if (next->addr + next->size_type > addr) {
+        if (next->addr + next->size > addr) {
             // overlap with existing range
             return ERROR;
         }
@@ -41,34 +43,36 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
     vmrange_t * range = NULL;
 
     if ((NULL != prev) &&
-        (addr == prev->addr + RANGE_SIZE(prev->size_type)) &&
-        (RT_FREE == RANGE_TYPE(prev->size_type))) {
+        (addr == prev->addr + prev->size) &&
+        (RT_FREE == prev->type)) {
         // merge with prev range
         range = prev;
-        range->size_type += size;
+        range->size += size;
     }
 
     if ((NULL != next) &&
         (addr + size == next->addr) &&
-        (RT_FREE == RANGE_TYPE(next->size_type))) {
+        (RT_FREE == next->type)) {
         // merge with next range
         if (NULL != range) {
-            range->size_type += RANGE_SIZE(range->size_type);
+            range->size += range->size;
             dl_remove(&space->ranges, &next->dl);
             pool_obj_free(&range_pool, next);
         } else {
             range = next;
             range->addr = addr;
-            range->size_type += size;
+            range->size += size;
         }
     }
 
     if (NULL == range) {
         // cannot merge, create new node and insert before `next`
         range = (vmrange_t *) pool_obj_alloc(&range_pool);
-        range->dl         = DLNODE_INIT;
-        range->addr       = addr;
-        range->size_type  = size | RT_FREE;
+        range->dl    = DLNODE_INIT;
+        range->addr  = addr;
+        range->size  = size;
+        range->type  = RT_FREE;
+        range->pages = NO_PAGE;
         dl_insert_before(&space->ranges, &range->dl, dl);
     }
 
@@ -88,17 +92,19 @@ int vmspace_add_used(vmspace_t * space, usize addr, usize size) {
             // this is the next range
             break;
         }
-        if (next->addr + next->size_type > addr) {
+        if (next->addr + next->size > addr) {
             // overlap with existing range
             return ERROR;
         }
     }
 
     // used ranges cannot merge
-    vmrange_t * range = range = (vmrange_t *) pool_obj_alloc(&range_pool);
-    range->dl         = DLNODE_INIT;
-    range->addr       = addr;
-    range->size_type  = size | RT_USED;
+    vmrange_t * range = (vmrange_t *) pool_obj_alloc(&range_pool);
+    range->dl    = DLNODE_INIT;
+    range->addr  = addr;
+    range->size  = size;
+    range->type  = RT_USED;
+    range->pages = NO_PAGE;
     dl_insert_before(&space->ranges, &range->dl, dl);
 
     return OK;
@@ -112,13 +118,13 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
     vmrange_t * min_range = NULL;
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if ((RT_FREE != RANGE_TYPE(range->size_type)) &&
-            (size     > RANGE_SIZE(range->size_type))) {
+        if ((RT_FREE != range->type) &&
+            (size     > range->size)) {
             continue;
         }
 
-        if (RANGE_SIZE(range->size_type) < min_size) {
-            min_size  = RANGE_SIZE(range->size_type);
+        if (range->size < min_size) {
+            min_size  = range->size;
             min_range = range;
         }
     }
@@ -127,15 +133,18 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
         return NULL;
     }
 
-    if (RANGE_SIZE(min_range->size_type) > size) {
+    if (min_range->size > size) {
         vmrange_t * rest = (vmrange_t *) pool_obj_alloc(&range_pool);
-        rest->dl         = DLNODE_INIT;
-        rest->addr       = min_range->addr + RANGE_SIZE(min_range->size_type);
-        rest->size_type  = (RANGE_SIZE(min_range->size_type) - size) | RT_FREE;
+        rest->dl    = DLNODE_INIT;
+        rest->addr  = min_range->addr + min_range->size;
+        rest->size  = min_range->size - size;
+        rest->type  = RT_FREE;
+        rest->pages = NO_PAGE;
         dl_insert_after(&space->ranges, &rest->dl, &min_range->dl);
     }
 
-    min_range->size_type = size | RT_USED;
+    min_range->size = size;
+    min_range->type = RT_USED;
     return min_range;
 }
 
@@ -147,8 +156,8 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if ((RT_FREE != RANGE_TYPE(range->size_type)) &&
-            (end > range->addr + RANGE_SIZE(range->size_type))) {
+        if ((RT_FREE != range->type) &&
+            (end > range->addr + range->size)) {
             continue;
         }
 
@@ -160,22 +169,27 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
         // we've found a valid range, return extra space
         if (range->addr < addr) {
             vmrange_t * prev = (vmrange_t *) pool_obj_alloc(&range_pool);
-            prev->dl        = DLNODE_INIT;
-            prev->addr      = range->addr;
-            prev->size_type = (addr - range->addr) | RT_FREE;
+            prev->dl    = DLNODE_INIT;
+            prev->addr  = range->addr;
+            prev->size  = addr - range->addr;
+            prev->type  = RT_FREE;
+            prev->pages = NO_PAGE;
             dl_insert_before(&space->ranges, &prev->dl, dl);
         }
 
-        if (end < range->addr + RANGE_SIZE(range->size_type)) {
+        if (end < range->addr + range->size) {
             vmrange_t * next = (vmrange_t *) pool_obj_alloc(&range_pool);
-            next->dl        = DLNODE_INIT;
-            next->addr      = end;
-            next->size_type = (range->addr + RANGE_SIZE(range->size_type) - end) | RT_FREE;
+            next->dl    = DLNODE_INIT;
+            next->addr  = end;
+            next->size  = range->addr + range->size - end;
+            next->type  = RT_FREE;
+            next->pages = NO_PAGE;
             dl_insert_after(&space->ranges, &next->dl, dl);
         }
 
-        range->addr      = addr;
-        range->size_type = size | RT_USED;
+        range->addr= addr;
+        range->size = size;
+        range->type = RT_USED;
         return range;
     }
 
@@ -183,24 +197,25 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
 }
 
 void vmspace_free(vmspace_t * space, vmrange_t * range) {
-    dbg_assert(RT_USED == RANGE_TYPE(range->size_type));
-    range->size_type = RANGE_SIZE(range->size_type) | RT_FREE;
+    dbg_assert(RT_USED == range->type);
+    range->size = range->size;
+    range->type = RT_FREE;
 
     if (NULL != range->dl.prev) {
         vmrange_t * prev = PARENT(range->dl.prev, vmrange_t, dl);
-        if ((RT_FREE == RANGE_TYPE(prev->size_type)) &&
-            (range->addr == prev->addr + RANGE_SIZE(prev->size_type))) {
-            range->addr       = prev->addr;
-            range->size_type += RANGE_SIZE(prev->size_type);
+        if ((RT_FREE     == prev->type) &&
+            (range->addr == prev->addr + (prev->size))) {
+            range->addr  = prev->addr;
+            range->size += prev->size;
             dl_remove(&space->ranges, &prev->dl);
         }
     }
 
     if (NULL != range->dl.next) {
         vmrange_t * next = PARENT(range->dl.next, vmrange_t, dl);
-        if ((RT_FREE == RANGE_TYPE(next->size_type)) &&
-            (next->addr == range->addr + RANGE_SIZE(range->size_type))) {
-            range->size_type += RANGE_SIZE(range->size_type);
+        if ((RT_FREE    == next->type) &&
+            (next->addr == range->addr + range->size)) {
+            range->size += range->size;
             dl_remove(&space->ranges, &next->dl);
         }
     }
@@ -215,8 +230,8 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if ((RT_FREE != RANGE_TYPE(range->size_type)) &&
-            (end > range->addr + RANGE_SIZE(range->size_type))) {
+        if ((RT_FREE != range->type) &&
+            (end > range->addr + range->size)) {
             continue;
         }
 
@@ -231,4 +246,46 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
 
     // no such range, or range is not free
     return NO;
+}
+
+int vmrange_pages_alloc(vmrange_t * range) {
+    dbg_assert(RT_USED == range->type);
+    dbg_assert(NO_PAGE == range->pages);
+
+    int page_count = range->size >> PAGE_SHIFT;
+    for (int i = 0; i < page_count; ++i) {
+        pfn_t p = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
+        if (NO_PAGE == p) {
+            return ERROR;
+        }
+        page_array[p].next = range->pages;
+        range->pages = p;
+    }
+
+    return OK;
+}
+
+void vmrange_pages_free(vmrange_t * range) {
+    if (RT_USED != range->type) {
+        return;
+    }
+    while (NO_PAGE != range->pages) {
+        pfn_t p = range->pages;
+        range->pages = page_array[p].next;
+        page_block_free(p, 0);
+    }
+}
+
+void vmrange_pages_map(vmrange_t * range) {
+    dbg_assert(RT_USED == range->type);
+    dbg_assert(NO_PAGE != range->pages);
+
+    for (pfn_t p = range->pages; p != NO_PAGE; p = page_array[p].next) {
+        //
+    }
+}
+
+void vmrange_pages_unmap(vmrange_t * range) {
+    dbg_assert(RT_USED == range->type);
+    dbg_assert(NO_PAGE != range->pages);
 }

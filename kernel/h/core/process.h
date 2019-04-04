@@ -2,16 +2,16 @@
 #define CORE_PROCESS_H
 
 #include <base.h>
+#include "spin.h"
 #include "vmspace.h"
 
 // TODO: use double linked list for pages?
 //       so that we can free memory during process lifetime.
 
 typedef struct process {
-    vmspace_t   vmspace;
-    usize       ctx;
-    pfn_t       pages;  // (single linked list) allocated pages
+    spin_t      lock;
     dllist_t    tasks;  // (double linked list) child tasks
+    vmspace_t   vm;     // virtual address space, and page table
 } process_t;
 
 extern void process_init(process_t * pid);

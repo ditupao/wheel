@@ -14,6 +14,7 @@ typedef struct task {
     u32         priority;       // must < PRIORITY_COUNT
     u32         cpu_idx;        // must < cpu_installed
     isize       ticks;          // only for PRIORITY_NONRT
+    pfn_t       pages;          // kernel stack page list
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
     dlnode_t    dl_proc;        // node in process

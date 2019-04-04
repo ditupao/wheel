@@ -314,9 +314,7 @@ static void task_a_proc() {
     int i = 0;
     while (1) {
         dbg_print("^%x", i++);
-        // loapic_timer_busywait(150);
         tick_delay(150);
-        // task_delay(100);
     }
 }
 
@@ -324,9 +322,7 @@ static void task_b_proc() {
     int i = 0;
     while (1) {
         dbg_print("=%d", i++);
-        // loapic_timer_busywait(200);
         tick_delay(200);
-        // task_delay(80);
     }
 }
 

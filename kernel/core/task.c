@@ -116,11 +116,14 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     dbg_assert(priority < PRIORITY_COUNT);
     dbg_assert(cpu_idx < cpu_installed);
 
+    // allocate space for kernel stack
     pfn_t pn = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
     if (NO_PAGE == pn) {
         // memory not enough, cannot create task
         return;
     }
+
+    // mark allocated page as kstack type
     for (pfn_t i = 0; i < 16; ++i) {
         page_array[pn + i].type  = PT_KSTACK;
         page_array[pn + i].block = 0;
@@ -128,10 +131,9 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     page_array[pn].block = 1;
     page_array[pn].order = 4;
     page_array[pn].next  = NO_PAGE;
-    pid->pages = pn;
 
     usize va = (usize) phys_to_virt((usize) pn << PAGE_SHIFT);
-    regs_init(&tid->regs, pid->ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+    regs_init(&tid->regs, pid->vm.ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
     tid->lock     = SPIN_INIT;
     tid->state    = TS_SUSPEND;
@@ -139,13 +141,22 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     tid->priority = priority;
     tid->cpu_idx  = cpu_idx;
     tid->ticks    = 0;
+    tid->pages    = pn;
     tid->dl_sched = DLNODE_INIT;
     tid->queue    = NULL;
     tid->dl_proc  = DLNODE_INIT;
     tid->process  = pid;
 
-    // put the task into process
+    // put the task into process, and update resource list
+    u32 key = irq_spin_take(&pid->lock);
     dl_push_tail(&pid->tasks, &tid->dl_proc);
+    irq_spin_give(&pid->lock, key);
+}
+
+static void task_cleanup(task_t * tid) {
+    dbg_assert(TS_DELETE == tid->state);
+
+    page_block_free(tid->pages, 4);
 }
 
 // mark current task as deleted
@@ -156,7 +167,9 @@ void task_exit() {
     sched_stop(tid, TS_DELETE);
     irq_spin_give(&tid->lock, key);
 
-    // TODO: register work function to delete TCB
+    // register work function to free kernel stack pages
+    work_enqueue(task_cleanup, tid, 0,0,0);
+
     task_switch();
 }
 
@@ -212,18 +225,6 @@ void task_resume(task_t * tid) {
         smp_reschedule(cpu);
     }
 }
-
-// void task_delay(int ticks) {
-//     task_t * tid = thiscpu_var(tid_prev);
-
-//     u32 key = irq_spin_take(&tid->lock);
-//     sched_stop(tid, TS_DELAY);
-//     wdog_cancel(&tid->wdog);
-//     wdog_start(&tid->wdog, ticks, task_wakeup, tid, 0,0,0);
-//     irq_spin_give(&tid->lock, key);
-
-//     task_switch();
-// }
 
 void task_delay(int ticks) {
     wdog_t   wd;

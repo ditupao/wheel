@@ -5,7 +5,10 @@ typedef struct tick_q {
     dllist_t q;
 } tick_q_t;
 
-// make tick_q cpu local?
+// make tick_q cpu local? NO
+// if we use percpu tick queue, then `wdog_cancel` would need to figure
+// out which cpu wdog is on. That might lead to race condition.
+// or we'll have to lock wdog, making things even more complex.
 static          tick_q_t tick_q;
 static volatile usize    tick_count;
 

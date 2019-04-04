@@ -12,9 +12,8 @@
 #define VECNUM_ERROR    0xfe
 #define VECNUM_SPURIOUS 0xff
 
-extern u8   loapic_get_id();
+extern u8   loapic_get_id  ();
 extern void loapic_send_eoi();
-// extern void loapic_timer_busywait(int ms);
 extern void loapic_emit_ipi(u32 cpu, u32 vec);
 
 extern __INIT void loapic_override(u64 addr);

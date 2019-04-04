@@ -113,13 +113,6 @@ void loapic_send_eoi() {
     write32(loapic_base + LOAPIC_EOI, 0);
 }
 
-// void loapic_timer_busywait(int ticks) {
-//     for (int i = 0; i < ticks; ++i) {
-//         while (read32(loapic_base + LOAPIC_CCR) > (loapic_tmr_hz / 2000)) {}
-//         while (read32(loapic_base + LOAPIC_CCR) < (loapic_tmr_hz / 2000)) {}
-//     }
-// }
-
 void loapic_emit_ipi(u32 cpu, u32 vec) {
     u32 icr_hi = ((u32) loapic_devs[cpu].apic_id << 24) & 0xff000000;
     u32 icr_lo = (vec & 0xff) | LOAPIC_FIXED | LOAPIC_EDGE | LOAPIC_DEASSERT;

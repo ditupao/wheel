@@ -176,7 +176,6 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     tss_init();
     dbg_regist(symtab, sym_size, strtab, str_size);
     write_gsbase(percpu_base);
-    dbg_print("percpu base %llx, size %llx.\r\n", percpu_base, percpu_size);
 
     // init interrupt handling
     int_init();
@@ -191,7 +190,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // init kernel address mapping and init process
     kernel_ctx_init();
     process_init(&init_pcb);
-    mmu_ctx_set(init_pcb.ctx);
+    mmu_ctx_set(init_pcb.vm.ctx);
 
     // binary semaphore, a.k.a. mutex
     semaphore_init(&sem_tst, 1, 1);
@@ -207,6 +206,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
+    dbg_print("processor %02d started.\r\n", cpu_activated);
     atomic32_inc(&cpu_activated);
     task_resume(thiscpu_ptr(idle_tcb));
     task_resume(&root_tcb);
@@ -234,9 +234,9 @@ __INIT __NORETURN void sys_init_ap() {
     // prepare tcb for idle task
     task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
-    dbg_print("processor %02d running.\r\n", cpu_activated);
 
     // activate idle-x, and switch task manually
+    dbg_print("processor %02d started.\r\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
     task_resume(thiscpu_ptr(idle_tcb));             // won't preempt
     thiscpu_var(tid_next) = thiscpu_ptr(idle_tcb);
@@ -265,9 +265,6 @@ task_t tcb_a;
 task_t tcb_b;
 
 static void root_proc() {
-    // console_dev_init();
-    dbg_print("processor 00 running.\r\n");
-
     // copy trampoline code
     u8 * src = (u8 *) &_trampoline_addr;
     u8 * dst = (u8 *) phys_to_virt(0x7c000);
@@ -285,18 +282,17 @@ static void root_proc() {
         }
     }
 
-    dbg_print("all cpu started!\r\n");
-
-#if 0
+#if 1
     // parse and load elf file, embedded as RAMFS
     u8  * bin_addr = &_ramfs_addr;
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
-    usize entry = elf64_parse(bin_addr, bin_size);
-    if (0 != entry) {
+    if (OK == elf64_load(bin_addr, bin_size)) {
         // allocate stack space for user-mode stack
         pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
         u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
-        enter_user(entry, ustack + PAGE_SIZE);
+
+        process_t * pid = thiscpu_var(tid_prev)->process;
+        enter_user(pid->entry, ustack + PAGE_SIZE);
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }

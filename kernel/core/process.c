@@ -5,4 +5,5 @@ void process_init(process_t * pid) {
     pid->lock  = SPIN_INIT;
     pid->tasks = DLLIST_INIT;
     vmspace_init(&pid->vm);
+    pid->entry = NO_ADDR;
 }

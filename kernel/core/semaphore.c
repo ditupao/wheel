@@ -92,7 +92,12 @@ int semaphore_take(semaphore_t * sem, int timeout) {
     // - successfully taken the semaphore
     // - semaphore got destroyed
     // - timeout
+
+    // cancel watch dog for safety
     wdog_cancel(&wd);
+
+    // in linux, we have to remove current tid from pend_q if timed out
+    // in wheel, tid got auto removed from pend_q during sched_cont
     return tid->ret_val;
 }
 

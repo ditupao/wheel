@@ -33,14 +33,14 @@ __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * 
 // after unlocking interrupts, call `task_switch` or `smp_reschedule` manually
 
 // add bits to `tid->state`, possibly stopping the task.
-// return ERROR if already stopped.
+// return previous task state.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
-int sched_stop(task_t * tid, u32 state) {
+u32 sched_stop(task_t * tid, u32 state) {
     // change state, return if already stopped
     u32 old_state = tid->state;
     tid->state |= state;
     if (TS_READY != old_state) {
-        return ERROR;
+        return old_state;
     }
 
     // lock ready queue of target cpu
@@ -65,19 +65,19 @@ int sched_stop(task_t * tid, u32 state) {
 
     // after this point, `tid_next` might be changed again
     raw_spin_give(&rdy->lock);
-    return OK;
+    return old_state;
 }
 
 // remove bits from `tid->state`, possibly resuming the task.
-// return ERROR if already running.
+// return previous task state.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
 // caller should call `task_switch` or `smp_reschedule` manually.
-int sched_cont(task_t * tid, u32 state) {
+u32 sched_cont(task_t * tid, u32 state) {
     // change state, return if already running
     u32 old_state = tid->state;
     tid->state &= ~state;
     if ((TS_READY == old_state) || (TS_READY != tid->state)) {
-        return ERROR;
+        return old_state;
     }
 
     // lock ready queue
@@ -99,7 +99,7 @@ int sched_cont(task_t * tid, u32 state) {
 
     // after this point, `tid_next` might be changed again
     raw_spin_give(&rdy->lock);
-    return OK;
+    return old_state;
 }
 
 //------------------------------------------------------------------------------
@@ -212,10 +212,10 @@ void task_resume(task_t * tid) {
 
     u32 key = irq_spin_take(&tid->lock);
     u32 cpu = tid->cpu_idx;
-    int ret = sched_cont(tid, TS_SUSPEND);
+    u32 ts  = sched_cont(tid, TS_SUSPEND);
     irq_spin_give(&tid->lock, key);
 
-    if (ERROR == ret) {
+    if (TS_READY == ts) {
         return;
     }
 
@@ -245,10 +245,10 @@ void task_wakeup(task_t * tid) {
 
     u32 key = irq_spin_take(&tid->lock);
     u32 cpu = tid->cpu_idx;
-    int ret = sched_cont(tid, TS_DELAY);
+    u32 ts  = sched_cont(tid, TS_DELAY);
     irq_spin_give(&tid->lock, key);
 
-    if (ERROR == ret) {
+    if (TS_READY == ts) {
         return;
     }
 

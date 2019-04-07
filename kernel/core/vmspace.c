@@ -12,7 +12,7 @@ void vmspace_destroy(vmspace_t * space) {
     dlnode_t * dl;
     while (NULL != (dl = dl_pop_head(&space->ranges))) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        vmrange_unmap(range);
+        vmrange_unmap(space, range);
         pool_obj_free(&range_pool, range);
     }
 }
@@ -248,7 +248,7 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
     return NO;
 }
 
-int vmrange_pages_alloc(vmrange_t * range) {
+int vmrange_map(vmspace_t * space, vmrange_t * range) {
     dbg_assert(RT_USED == range->type);
     dbg_assert(NO_PAGE == range->pages);
 
@@ -260,32 +260,27 @@ int vmrange_pages_alloc(vmrange_t * range) {
         }
         page_array[p].next = range->pages;
         range->pages = p;
+
+        usize va = range->addr + PAGE_SIZE * i;
+        usize pa = (usize) p << PAGE_SHIFT;
+        mmu_map(space->ctx, va, pa, 1, 0);
     }
 
     return OK;
 }
 
-void vmrange_pages_free(vmrange_t * range) {
+void vmrange_unmap(vmspace_t * space, vmrange_t * range) {
     if (RT_USED != range->type) {
         return;
     }
-    while (NO_PAGE != range->pages) {
-        pfn_t p = range->pages;
-        range->pages = page_array[p].next;
+
+    int page_count = range->size >> PAGE_SHIFT;
+    mmu_unmap(space->ctx, range->addr, page_count);
+
+    pfn_t p = range->pages;
+    while (NO_PAGE != p) {
         page_block_free(p, 0);
+        p = page_array[p].next;
     }
-}
-
-void vmrange_pages_map(vmrange_t * range) {
-    dbg_assert(RT_USED == range->type);
-    dbg_assert(NO_PAGE != range->pages);
-
-    for (pfn_t p = range->pages; p != NO_PAGE; p = page_array[p].next) {
-        //
-    }
-}
-
-void vmrange_pages_unmap(vmrange_t * range) {
-    dbg_assert(RT_USED == range->type);
-    dbg_assert(NO_PAGE != range->pages);
+    range->pages = NO_PAGE;
 }

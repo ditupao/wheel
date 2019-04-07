@@ -12,6 +12,7 @@ typedef struct process {
     spin_t      lock;
     dllist_t    tasks;  // (double linked list) child tasks
     vmspace_t   vm;     // virtual address space, and page table
+    usize       entry;
 } process_t;
 
 extern void process_init(process_t * pid);

@@ -27,8 +27,7 @@ extern vmrange_t * vmspace_alloc   (vmspace_t * space, usize size);
 extern vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size);
 extern void        vmspace_free    (vmspace_t * space, vmrange_t * range);
 extern int         vmspace_is_free (vmspace_t * space, usize addr, usize size);
-
-extern int  vmrange_pages_alloc(vmrange_t * range);
-extern void vmrange_pages_free (vmrange_t * range);
+extern int         vmrange_map     (vmspace_t * space, vmrange_t * range);
+extern void        vmrange_unmap   (vmspace_t * space, vmrange_t * range);
 
 #endif // CORE_VMSPACE_H

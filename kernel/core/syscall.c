@@ -11,6 +11,13 @@
 
 #define SYS_MAGIC   5
 
+// // exit current process
+// static void syscall_exit(int code) {
+//     process_t * pid = thiscpu_var(tid_prev)->process;
+
+//     // stop all child task (except this one)
+// }
+
 usize syscall_dispatch(usize id, void * a1, void * a2, void * a3, void * a4) {
     // keep gcc happy
     a1 = a1;

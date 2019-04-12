@@ -328,6 +328,7 @@ static void idle_proc() {
     task_t * tid = thiscpu_var(tid_prev);
     raw_spin_take(&tid->lock);
 
+    dbg_print("<idling on CPU-%d>", cpu_index());
     while (1) {
         ASM("hlt");
     }

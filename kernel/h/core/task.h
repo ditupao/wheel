@@ -31,7 +31,7 @@ typedef struct task {
 #define TS_PEND         0x01    // waiting for something, in pend_q
 #define TS_DELAY        0x02    // task delay or timeout, wdog active
 #define TS_SUSPEND      0x04    // stopped on purpose, not on any q
-#define TS_DELETE       0x08    // marked for delete
+#define TS_ZOMBIE       0x08    // finished, but TCB still present
 
 extern __PERCPU task_t * tid_prev;
 extern __PERCPU task_t * tid_next;

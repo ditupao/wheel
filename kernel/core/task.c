@@ -22,7 +22,6 @@ typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
 __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
     ((task_proc_t) proc) (a1, a2, a3, a4);
     task_exit();
-    while (1) {}
 }
 
 //------------------------------------------------------------------------------
@@ -154,9 +153,10 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
 }
 
 static void task_cleanup(task_t * tid) {
-    dbg_assert(TS_DELETE == tid->state);
+    dbg_assert(TS_ZOMBIE == tid->state);
 
     page_block_free(tid->pages, 4);
+    // TODO: also signal parent for finish
 }
 
 // mark current task as deleted
@@ -164,7 +164,7 @@ void task_exit() {
     task_t * tid = thiscpu_var(tid_prev);
 
     u32 key = irq_spin_take(&tid->lock);
-    sched_stop(tid, TS_DELETE);
+    sched_stop(tid, TS_ZOMBIE);
     irq_spin_give(&tid->lock, key);
 
     // register work function to free kernel stack pages

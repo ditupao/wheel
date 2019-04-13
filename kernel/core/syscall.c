@@ -15,9 +15,6 @@
 
 #define SYS_MAGIC   255
 
-
-static pool_t tcb_pool;
-
 // // exit current process
 // static void syscall_exit(int code) {
 //     process_t * pid = thiscpu_var(tid_prev)->process;
@@ -31,8 +28,7 @@ void sys_exit() {
 
 void sys_spawn(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
-    task_t * tid = pool_obj_alloc(&tcb_pool);
-    task_init(tid, cur->process, PRIORITY_NONRT, 0, entry, 0,0,0,0);
+    task_t * tid = task_create(cur->process, PRIORITY_NONRT, 0, entry, 0,0,0,0);
     task_resume(tid);
 }
 
@@ -67,6 +63,6 @@ usize syscall_dispatch(usize id, void * a1, void * a2, void * a3, void * a4) {
     }
 }
 
-void __INIT syscall_init() {
-    pool_init(&tcb_pool, sizeof(task_t));
+void syscall_dispatch2() {
+    dbg_print("doing syscall.\r\n");
 }

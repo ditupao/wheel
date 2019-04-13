@@ -3,7 +3,8 @@
 
 .global entry_0
 .global entry_1
-.global entry_sc
+.global entry_int80
+.global entry_syscall
 .global task_switch
 .global enter_user
 .global load_gdtr
@@ -18,6 +19,7 @@
 .extern exp_dispatch            // in `liba/cpu.c`
 .extern int_dispatch            // in `liba/cpu.c`
 .extern syscall_dispatch        // in `core/syscall.c`
+.extern syscall_dispatch2       // in `core/syscall.c`
 
 .extern work_dequeue
 
@@ -105,16 +107,6 @@ vec = 2
 vec = vec + 1
 .endr
 
-// the entry for system call (int 0x80) is different
-// syscall works like normal C function, no need to save regs
-entry_sc:
-    swapgs                              // always come from ring3
-    sti
-    call    syscall_dispatch
-    cli
-    swapgs                              // always return to ring3
-    iretq
-
 // common code for exception handling
 exception_stub:
     save_regs                           // save all registers
@@ -152,7 +144,7 @@ interrupt_stub:
 
     movq    %gs:(tid_prev), %rax
     movq    %rsp, (%rax)                // save to `tid_prev->regs->rsp`
-    movq    %gs:(int_stack_ptr), %rsp   // switch to interruipt stack
+    movq    %gs:(int_stack_ptr), %rsp   // switch to interrupt stack
 
 _no_stack_switch:
     sti
@@ -186,6 +178,38 @@ _no_stack_restore:
     restore_regs                        // restore all registers
     addq    $8, %rsp                    // skip error code
     iretq                               // return from exception
+
+//------------------------------------------------------------------------------
+// system call entry
+
+// the entry for system call (int 0x80) is different from other vectors
+// syscall works like normal C function, no need to save regs
+entry_int80:
+    swapgs                              // always come from ring3
+    sti
+    call    syscall_dispatch
+    cli
+    swapgs                              // always return to ring3
+    iretq
+
+// entry point for syscall/sysret version
+entry_syscall:
+    swapgs
+    // old rflags saved in r11, old rip saved in rcx
+    // stack remains unchanged (still user stack)
+    movq    %rcx, %r12
+    movq    %rsp, %r13
+    movq    %gs:(tid_prev), %rcx        // current task
+    movq    0x08(%rcx), %rsp            // switch to kernel stack
+
+    call    syscall_dispatch2
+
+    // resume rcx and rsp
+    movq    %r12, %rcx
+    movq    %r13, %rsp
+
+    swapgs
+    sysretq
 
 //------------------------------------------------------------------------------
 // task support

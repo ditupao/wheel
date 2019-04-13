@@ -47,7 +47,7 @@ void work_dequeue() {
 }
 
 __INIT void work_lib_init() {
-    for (u32 i = 0; i < cpu_installed; ++i) {
+    for (int i = 0; i < cpu_installed; ++i) {
         work_q_t * q = percpu_ptr(i, work_q);
         q->lock  = SPIN_INIT;
         q->count = 0;

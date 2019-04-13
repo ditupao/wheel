@@ -12,6 +12,7 @@
 #define SYS_MAGIC   255
 
 extern unsigned int syscall(int func, void * a1);
+extern unsigned int syscall2();
 
 void _entry() {
     char * video = (char *) (0xb8000 + 0xffff800000000000UL);
@@ -27,6 +28,8 @@ void _entry() {
     } else {
         syscall(SYS_WRITE, "we got something else!\r\n");
     }
+
+    syscall2();
 
     syscall(SYS_EXIT, 0);
     syscall(SYS_WRITE, "already deleted!\r\n");

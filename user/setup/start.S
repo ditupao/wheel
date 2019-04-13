@@ -5,6 +5,7 @@
 .extern _entry
 
 .global syscall
+.global syscall2
 
 .text
 .code64
@@ -17,4 +18,8 @@ _start:
 
 syscall:
     int     $0x80
+    ret
+
+syscall2:
+    syscall
     ret

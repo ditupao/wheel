@@ -21,11 +21,11 @@ typedef struct regs {
 typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);
 
 // global data
-extern __INITDATA u32 cpu_installed;
-extern            u32 cpu_activated;
+extern __INITDATA int cpu_installed;
+extern            int cpu_activated;
 extern            u64 percpu_base;
 extern            u64 percpu_size;
-extern __PERCPU   u32 int_depth;
+extern __PERCPU   int int_depth;
 extern __PERCPU   u64 int_stack_ptr;
 extern isr_proc_t     isr_tbl[];
 

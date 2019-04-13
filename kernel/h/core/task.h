@@ -11,8 +11,8 @@ typedef struct task {
     spin_t      lock;           // spinlock used in state-switching
     u32         state;          // task state
     int         ret_val;        // return code from PEND state
-    u32         priority;       // must < PRIORITY_COUNT
-    u32         cpu_idx;        // must < cpu_installed
+    int         priority;       // must < PRIORITY_COUNT, could use shorter type
+    int         cpu_idx;        // must < cpu_installed, could use shorter type
     isize       ticks;          // only for PRIORITY_NONRT
     pfn_t       pages;          // kernel stack page list
     dlnode_t    dl_sched;       // node in ready_q/pend_q
@@ -41,16 +41,16 @@ extern __PERCPU u32      no_preempt;
 static inline void preempt_lock  () { thiscpu32_add(&no_preempt, 2); }
 static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 
-extern u32  sched_stop  (task_t * tid, u32 state);
-extern u32  sched_cont  (task_t * tid, u32 state);
-extern void task_init   (task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
-                         void * proc, void * a1, void * a2, void * a3, void * a4);
-extern void task_exit   ();
-extern void task_yield  ();
-extern void task_suspend();
-extern void task_resume (task_t * tid);
-extern void task_delay  (int ticks);
-extern void task_wakeup (task_t * tid);
+extern u32      sched_stop  (task_t * tid, u32 state);
+extern u32      sched_cont  (task_t * tid, u32 state);
+extern task_t * task_create (process_t * pid, int priority, int cpu_idx,
+                             void * proc, void * a1, void * a2, void * a3, void * a4);
+extern void     task_exit   ();
+extern void     task_yield  ();
+extern void     task_suspend();
+extern void     task_resume (task_t * tid);
+extern void     task_delay  (int ticks);
+extern void     task_wakeup (task_t * tid);
 
 extern __INIT void task_lib_init();
 

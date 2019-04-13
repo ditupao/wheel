@@ -53,11 +53,11 @@ static u64       gdt[MAX_CPU_COUNT*2+6];
 static idt_ent_t idt[MAX_INT_COUNT];
 __PERCPU tss_t   tss;
 
-__INITDATA u32 cpu_installed = 0;  // number of cpu installed
-           u32 cpu_activated = 0;  // number of cpu activated
+__INITDATA int cpu_installed = 0;  // number of cpu installed
+           int cpu_activated = 0;  // number of cpu activated
            u64 percpu_base   = 0;  // cpu0's offset to its percpu area
            u64 percpu_size   = 0;  // length of one per-cpu area
-__PERCPU   u32 int_depth;
+__PERCPU   int int_depth;
 __PERCPU   u64 int_stack_ptr;
 __PERCPU   u8  int_stack[16*PAGE_SIZE];
 
@@ -67,7 +67,8 @@ isr_proc_t isr_tbl[MAX_INT_COUNT];
 // defined in cpu.S
 extern void entry_0 ();
 extern void entry_1 ();
-extern void entry_sc();
+extern void entry_int80();
+extern void entry_syscall();
 extern void load_gdtr(gdt_ptr_t * ptr);
 extern void load_idtr(idt_ptr_t * ptr);
 extern void load_tr  (u16 sel);
@@ -120,9 +121,15 @@ __INIT void cpu_init() {
 
     // enable No-Execute bit in page entries
     u64 efer = read_msr(0xc0000080);
+    efer |= (1UL <<  0);        // enable syscall/sysret on intel processors
     efer |= (1UL << 11);        // no-execute mode enable
     // efer |= (1UL << 14);        // fast fxsave/fxrstor
     write_msr(0xc0000080, efer);
+
+    // setup msr for syscall/sysret
+    write_msr(0xc0000081, 0x001b000800000000UL);    // STAR
+    write_msr(0xc0000082, (u64) entry_syscall);     // LSTAR
+    write_msr(0xc0000084, 0UL);                     // SFMASK
 }
 
 __INIT void gdt_init() {
@@ -156,7 +163,7 @@ __INIT void idt_init() {
         u64 step  = (u64) entry_1 - (u64) entry_0;
         for (int vec = 0; vec < MAX_INT_COUNT; ++vec) {
             if ((vec == 0x80) || (vec == 0x81)) {
-                fill_idt_ent(&idt[vec], (u64) entry_sc, 3);
+                fill_idt_ent(&idt[vec], (u64) entry_int80, 3);
             } else {
                 fill_idt_ent(&idt[vec], entry, 0);
             }
@@ -205,7 +212,7 @@ void int_unlock(u32 key) {
 // setup interrupt handling, clear handler table and interrupt stack
 __INIT void int_init() {
     memset(isr_tbl, 0, MAX_INT_COUNT * sizeof(isr_proc_t));
-    for (u32 i = 0; i < cpu_installed; ++i) {
+    for (int i = 0; i < cpu_installed; ++i) {
         u64 top = (u64) percpu_ptr(i, int_stack[16*PAGE_SIZE]);
         percpu_var(i, int_stack_ptr) = top;
         percpu_var(i, int_depth)     = 0;

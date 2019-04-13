@@ -56,7 +56,7 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
     u8 * v_end   = (u8 *) ROUND_UP((u64) &_kernel_end, 64);
     percpu_base = (u64) (v_end - &_percpu_addr);
     percpu_size = ROUND_UP((u64) (&_percpu_end - &_percpu_addr), 64);
-    for (u32 i = 0; i < cpu_installed; ++i) {
+    for (int i = 0; i < cpu_installed; ++i) {
         u8 * dst = &_percpu_addr + percpu_base + percpu_size * i;
         memcpy(dst, &_percpu_addr, percpu_size);
     }
@@ -112,8 +112,8 @@ extern usize kernel_ctx;
 
 // init process, root task and idle tasks
 static            process_t init_pcb;
-static __INITDATA task_t    root_tcb;
-static __PERCPU   task_t    idle_tcb;
+static __INITDATA task_t  * root_tid;
+static __PERCPU   task_t  * idle_tid;
 
 // forward declarations
 static void root_proc();
@@ -196,20 +196,20 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     semaphore_init(&sem_tst, 1, 1);
     wdog_init(&wd_tst);
 
-    // dummy tcb
+    // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for root and idle-0
-    task_init(&root_tcb, &init_pcb, 10, 0, root_proc, 0,0,0,0);
-    task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+    root_tid = task_create(&init_pcb, 10, 0, root_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(&init_pcb, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
     dbg_print("processor %02d started.\r\n", cpu_activated);
-    atomic32_inc(&cpu_activated);
-    task_resume(thiscpu_ptr(idle_tcb));
-    task_resume(&root_tcb);
+    atomic32_inc((u32 *) &cpu_activated);
+    task_resume(thiscpu_var(idle_tid));
+    task_resume(root_tid);
 
     dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
     while (1) {}
@@ -226,20 +226,19 @@ __INIT __NORETURN void sys_init_ap() {
     // setup local apic and timer
     loapic_dev_init();
 
-    // dummy tcb
+    // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for idle task
-    task_init(thiscpu_ptr(idle_tcb), &init_pcb, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
-
+    thiscpu_var(idle_tid) = task_create(&init_pcb, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
     // activate idle-x, and switch task manually
     dbg_print("processor %02d started.\r\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
-    task_resume(thiscpu_ptr(idle_tcb));             // won't preempt
-    thiscpu_var(tid_next) = thiscpu_ptr(idle_tcb);
+    task_resume(thiscpu_var(idle_tid));             // won't preempt
+    thiscpu_var(tid_next) = thiscpu_var(idle_tid);
     task_switch();
 
     dbg_print("YOU CAN'T SEE THIS LINE!\r\n");
@@ -261,8 +260,8 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 static void task_a_proc();
 static void task_b_proc();
 
-task_t tcb_a;
-task_t tcb_b;
+task_t * tid_a = NULL;
+task_t * tid_b = NULL;
 
 static void root_proc() {
     // copy trampoline code
@@ -277,7 +276,7 @@ static void root_proc() {
         loapic_emit_init(idx);       tick_delay(10);    // INIT+10ms
         loapic_emit_sipi(idx, 0x7c); tick_delay(1);     // SIPI+1ms
         loapic_emit_sipi(idx, 0x7c); tick_delay(1);     // SIPI+1ms
-        while (percpu_var(idx, tid_prev) != percpu_ptr(idx, idle_tcb)) {
+        while (percpu_var(idx, tid_prev) != percpu_var(idx, idle_tid)) {
             tick_delay(10);
         }
     }
@@ -289,7 +288,7 @@ static void root_proc() {
     if (OK == elf64_load(bin_addr, bin_size)) {
         // allocate stack space for user-mode stack
         pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
-        u64 ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
+        u64   ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
 
         process_t * pid = thiscpu_var(tid_prev)->process;
         enter_user(pid->entry, ustack + PAGE_SIZE);
@@ -298,10 +297,10 @@ static void root_proc() {
     }
 #endif
 
-    task_init(&tcb_a, &init_pcb, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
-    task_init(&tcb_b, &init_pcb, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
-    task_resume(&tcb_a);
-    task_resume(&tcb_b);
+    tid_a = task_create(&init_pcb, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
+    tid_b = task_create(&init_pcb, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
+    task_resume(tid_a);
+    task_resume(tid_b);
 
     while (1) {}
 }
@@ -328,7 +327,7 @@ static void idle_proc() {
     task_t * tid = thiscpu_var(tid_prev);
     raw_spin_take(&tid->lock);
 
-    dbg_print("<idling on CPU-%d>", cpu_index());
+    dbg_print("<idle-%d>", cpu_index());
     while (1) {
         ASM("hlt");
     }

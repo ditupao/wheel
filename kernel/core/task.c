@@ -13,6 +13,7 @@ __PERCPU task_t  * tid_prev;
 __PERCPU task_t  * tid_next;     // also protected by ready_q.lock
 __PERCPU u32       no_preempt;
 __PERCPU ready_q_t ready_q;
+static   pool_t    tcb_pool;
 
 //------------------------------------------------------------------------------
 // task entry point, all task start from here
@@ -22,6 +23,9 @@ typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
 __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
     ((task_proc_t) proc) (a1, a2, a3, a4);
     task_exit();
+
+    // make sure we don't return
+    while (1) {}
 }
 
 //------------------------------------------------------------------------------
@@ -80,8 +84,8 @@ u32 sched_cont(task_t * tid, u32 state) {
     }
 
     // lock ready queue
-    u32         cpu = tid->cpu_idx;
-    u32         pri = tid->priority;
+    int         cpu = tid->cpu_idx;
+    int         pri = tid->priority;
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
@@ -109,17 +113,19 @@ u32 sched_cont(task_t * tid, u32 state) {
 // TODO: also save tid in page_array (kernel object always in higher half,
 //       8-bytes aligned? 47-3=45 bits, so only 45 bits is enough. If we
 //       want to use less bits, we can allocate tcb only from one pool)
-void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
-               void * proc, void * a1, void * a2, void * a3, void * a4) {
-    dbg_assert(NULL != tid);
-    dbg_assert(priority < PRIORITY_COUNT);
-    dbg_assert(cpu_idx < cpu_installed);
+task_t * task_create(process_t * pid, int priority, int cpu_idx,
+                     void * proc, void * a1, void * a2, void * a3, void * a4) {
+    dbg_assert((0 <= priority) && (priority < PRIORITY_COUNT));
+    dbg_assert((0 <= cpu_idx)  && (cpu_idx  < cpu_installed));
+
+    // allocate
+    task_t * tid = pool_obj_alloc(&tcb_pool);
 
     // allocate space for kernel stack
     pfn_t pn = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
     if (NO_PAGE == pn) {
         // memory not enough, cannot create task
-        return;
+        return NULL;
     }
 
     // mark allocated page as kstack type
@@ -150,13 +156,23 @@ void task_init(task_t * tid, process_t * pid, u32 priority, u32 cpu_idx,
     u32 key = irq_spin_take(&pid->lock);
     dl_push_tail(&pid->tasks, &tid->dl_proc);
     irq_spin_give(&pid->lock, key);
+
+    return tid;
 }
 
+// work function to be called after task_exit
 static void task_cleanup(task_t * tid) {
     dbg_assert(TS_ZOMBIE == tid->state);
 
-    page_block_free(tid->pages, 4);
+    // free all pages
     // TODO: also signal parent for finish
+    while (NO_PAGE != tid->pages) {
+        pfn_t next = page_array[tid->pages].next;
+        page_block_free(tid->pages, page_array[tid->pages].block);
+        tid->pages = next;
+    }
+
+    pool_obj_free(&tcb_pool, tid);
 }
 
 // mark current task as deleted
@@ -263,7 +279,7 @@ void task_wakeup(task_t * tid) {
 // module setup
 
 __INIT void task_lib_init() {
-    for (u32 i = 0; i < cpu_installed; ++i) {
+    for (int i = 0; i < cpu_installed; ++i) {
         percpu_var(i, tid_prev) = NULL;
         percpu_var(i, tid_prev) = NULL;
         percpu_var(i, no_preempt) = 0;
@@ -271,8 +287,10 @@ __INIT void task_lib_init() {
         ready_q_t * rdy = percpu_ptr(i, ready_q);
         rdy->lock = SPIN_INIT;
         rdy->priorities = 0;
-        for (u32 p = 0; p < PRIORITY_COUNT; ++p) {
+        for (int p = 0; p < PRIORITY_COUNT; ++p) {
             rdy->q[p] = DLLIST_INIT;
         }
     }
+
+    pool_init(&tcb_pool, sizeof(task_t));
 }

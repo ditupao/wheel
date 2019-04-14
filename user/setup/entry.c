@@ -14,6 +14,11 @@
 extern unsigned int syscall(int func, void * a1);
 extern unsigned int syscall2();
 
+void another_thread_func() {
+    syscall(SYS_WRITE, "printing within another thread!\r\n");
+    syscall(SYS_EXIT, 0);
+}
+
 void _entry() {
     char * video = (char *) (0xb8000 + 0xffff800000000000UL);
     char * msg   = "hello from user mode.";
@@ -31,7 +36,9 @@ void _entry() {
 
     syscall2();
 
-    syscall(SYS_EXIT, 0);
+    syscall(SYS_SPAWN, another_thread_func);
+
+    // syscall(SYS_EXIT, 0);
     syscall(SYS_WRITE, "already deleted!\r\n");
 
     while (1) {}

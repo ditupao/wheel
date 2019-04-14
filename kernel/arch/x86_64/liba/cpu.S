@@ -278,7 +278,7 @@ enter_user:
     pushq   $0x23       // ss
     pushq   %rsi        // rsp
     pushq   %rax        // rflags
-    pushq   $0x1b       // cs
+    pushq   $0x2b       // cs
     pushq   %rdi        // rip
     iretq
 

@@ -26,9 +26,32 @@ void sys_exit() {
     task_exit();
 }
 
+typedef int (* thread_proc_t) ();
+
+__NORETURN void thread_entry(void * entry) {
+    pfn_t    frame = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4); // 64K
+    usize    stack = (usize) phys_to_virt((usize) frame << PAGE_SHIFT);
+    task_t * self  = thiscpu_var(tid_prev);
+
+    // dbg_print("new thread created!\r\n");
+
+    page_array[frame].block = 1;
+    page_array[frame].order = 4;
+    page_array[frame].next  = self->pages;
+    self->pages             = frame;
+
+    enter_user((usize) entry, stack + 16 * PAGE_SIZE);
+
+    // this is not needed, since user mode program won't return to kernel mode
+    task_exit();
+
+    // make sure this function doesn't return
+    while (1) {}
+}
+
 void sys_spawn(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
-    task_t * tid = task_create(cur->process, PRIORITY_NONRT, 0, entry, 0,0,0,0);
+    task_t * tid = task_create(cur->process, cur->priority, 0, thread_entry, entry, 0,0,0);
     task_resume(tid);
 }
 

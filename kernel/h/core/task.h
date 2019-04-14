@@ -13,7 +13,8 @@ typedef struct task {
     int         ret_val;        // return code from PEND state
     int         priority;       // must < PRIORITY_COUNT, could use shorter type
     int         cpu_idx;        // must < cpu_installed, could use shorter type
-    isize       ticks;          // only for PRIORITY_NONRT
+    int         timeslice;      // total timeslice
+    int         remaining;      // remaining timeslice
     pfn_t       pages;          // kernel stack page list
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q

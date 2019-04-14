@@ -140,17 +140,18 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
     usize va = (usize) phys_to_virt((usize) pn << PAGE_SHIFT);
     regs_init(&tid->regs, pid->vm.ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
-    tid->lock     = SPIN_INIT;
-    tid->state    = TS_SUSPEND;
-    tid->ret_val  = 0;
-    tid->priority = priority;
-    tid->cpu_idx  = cpu_idx;
-    tid->ticks    = 0;
-    tid->pages    = pn;
-    tid->dl_sched = DLNODE_INIT;
-    tid->queue    = NULL;
-    tid->dl_proc  = DLNODE_INIT;
-    tid->process  = pid;
+    tid->lock      = SPIN_INIT;
+    tid->state     = TS_SUSPEND;
+    tid->ret_val   = 0;
+    tid->priority  = priority;
+    tid->cpu_idx   = cpu_idx;
+    tid->timeslice = 200;   // TODO: put default timeslice in config
+    tid->remaining = 200;
+    tid->pages     = pn;
+    tid->dl_sched  = DLNODE_INIT;
+    tid->queue     = NULL;
+    tid->dl_proc   = DLNODE_INIT;
+    tid->process   = pid;
 
     // put the task into process, and update resource list
     u32 key = irq_spin_take(&pid->lock);
@@ -193,8 +194,7 @@ void task_exit() {
 // task state not changed, no need to lock current tid
 void task_yield() {
     task_t    * tid = thiscpu_var(tid_prev);
-    u32         cpu = tid->cpu_idx;
-    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+    ready_q_t * rdy = thiscpu_ptr(ready_q);
 
     u32 key = irq_spin_take(&rdy->lock);
 
@@ -204,8 +204,9 @@ void task_yield() {
     dbg_assert(0 != rdy->priorities);
     u32 pri = CTZ32(rdy->priorities);
     task_t * cand = PARENT(rdy->q[pri].head, task_t, dl_sched);
-    percpu_var(cpu, tid_next) = cand;
+    thiscpu_var(tid_next) = cand;
 
+    // dbg_print("<%p->%p>", tid, cand);
     irq_spin_give(&rdy->lock, key);
 
     task_switch();

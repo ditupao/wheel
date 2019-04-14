@@ -15,7 +15,7 @@ clean:
 
 $(OUTDIR)/setup.app: $(OBJS)
 	@ echo "[LD:U] $@"
-	@ $(CC) $(LFLAGS) -o $@ $^
+	@ $(CC) $(LFLAGS) -Wl,-Map,$@.map -o $@ $^
 
 $(filter %.S.o, $(OBJS)): $(OUTDIR)/%.S.o: %.S
 	@ echo "[AS:U] $@"

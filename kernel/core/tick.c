@@ -95,10 +95,12 @@ void tick_advance() {
         irq_spin_give(&tick_q.lock, k);
     }
 
+    // round robin (not only for non-rt tasks)
     task_t * tid = thiscpu_var(tid_prev);
-    --tid->ticks;
-    if ((tid->priority == PRIORITY_NONRT) && (tid->ticks <= 0)) {
-        tid->ticks = 1000;
+    --tid->remaining;
+    // dbg_print("-%ds", tid->remaining);
+    if (tid->remaining <= 0) {
+        tid->remaining = tid->timeslice;
         task_yield();
     }
 }

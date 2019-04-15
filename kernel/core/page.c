@@ -228,6 +228,14 @@ void page_range_free(pfn_t rng, u32 count) {
     }
 }
 
+pfn_t page_alloc(u32 zones) {
+    return NO_PAGE;
+}
+
+void page_free(pfn_t page) {
+    return;
+}
+
 usize free_page_count(u32 zones) {
     usize count = 0;
     if (zones & ZONE_DMA) {

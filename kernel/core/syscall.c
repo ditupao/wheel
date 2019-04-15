@@ -29,20 +29,23 @@ void sys_exit() {
 typedef int (* thread_proc_t) ();
 
 __NORETURN void thread_entry(void * entry) {
-    pfn_t    frame = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4); // 64K
-    usize    stack = (usize) phys_to_virt((usize) frame << PAGE_SHIFT);
+    // pfn_t    frame = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4); // 64K
+    // usize    stack = (usize) phys_to_virt((usize) frame << PAGE_SHIFT);
     task_t * self  = thiscpu_var(tid_prev);
 
-    // dbg_print("new thread created!\r\n");
+    // // prepare for user stack
+    // page_array[frame].block = 1;
+    // page_array[frame].order = 4;
+    // page_array[frame].next  = self->pages;
+    // self->pages             = frame;
 
-    page_array[frame].block = 1;
-    page_array[frame].order = 4;
-    page_array[frame].next  = self->pages;
-    self->pages             = frame;
+    vmrange_t * range = vmspace_alloc(&self->process->vm, 16 * PAGE_SIZE);
+    vmrange_map(&self->process->vm, range);
 
-    enter_user((usize) entry, stack + 16 * PAGE_SIZE);
+    enter_user((usize) entry, range->addr + 16 * PAGE_SIZE);
 
-    // this is not needed, since user mode program won't return to kernel mode
+    // actually this is not needed, because
+    // user mode program won't return to kernel mode
     task_exit();
 
     // make sure this function doesn't return

@@ -45,6 +45,8 @@ extern pfn_t page_block_alloc(u32 zones, u32 order);
 extern void  page_block_free (pfn_t blk, u32 order);
 extern pfn_t page_range_alloc(u32 zones, u32 count);
 extern void  page_range_free (pfn_t rng, u32 count);
+extern pfn_t page_alloc(u32 zones);
+extern void  page_free (pfn_t page);
 extern usize free_page_count (u32 zones);
 extern void  dump_page_layout(u32 zones);
 

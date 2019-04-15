@@ -76,9 +76,12 @@ static void mmu_map_4k(usize ctx, u64 va, u64 pa, u64 fields) {
     }
     pd[pde] |= MMU_US| MMU_RW | MMU_P;
     u64 * pt = (u64 *) phys_to_virt(pd[pde] & MMU_ADDR);
-    
+
     // fill the final entry
     pt[pte] = (pa & MMU_ADDR) | fields | MMU_P;
+    if (read_cr3() == ctx) {
+        ASM("invlpg (%0)" :: "r"(va));
+    }
 }
 
 // create a 2m mapping entry in the page table
@@ -107,20 +110,23 @@ static void mmu_map_2m(usize ctx, u64 va, u64 pa, u64 fields) {
     }
     pdp[pdpe] |= MMU_US| MMU_RW | MMU_P;
     u64 * pd = (u64 *) phys_to_virt(pdp[pdpe] & MMU_ADDR);
-    
+
     // fill the final entry
     pd[pde] = (pa & MMU_ADDR) | fields | MMU_PS | MMU_P;
+    if (read_cr3() == ctx) {
+        ASM("invlpg (%0)" :: "r"(va));
+    }
 }
 
 //------------------------------------------------------------------------------
 // public functions
 
 usize mmu_ctx_get() {
-    return read_cr3();
+    return (usize) read_cr3();
 }
 
 void mmu_ctx_set(usize ctx) {
-    write_cr3(ctx);
+    write_cr3((u64) ctx);
 }
 
 // create a new context table, allocate space for top-level table

@@ -137,7 +137,6 @@ __INIT void gdt_init() {
         gdt[0] = 0UL;                   // dummy
         gdt[1] = 0x00a0980000000000UL;  // kernel code
         gdt[2] = 0x00c0920000000000UL;  // kernel data
-        // gdt[3] = 0x00a0f80000000000UL;  // user code compatibility mode
         gdt[3] = 0UL;                   // reserved for 32-bit user code
         gdt[4] = 0x00c0f20000000000UL;  // user data
         gdt[5] = 0x00a0f80000000000UL;  // user code

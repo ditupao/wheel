@@ -3,6 +3,7 @@
 static pool_t range_pool;
 
 void vmspace_init(vmspace_t * space) {
+    space->lock   = SPIN_INIT;
     space->ctx    = mmu_ctx_create();
     space->ranges = DLLIST_INIT;
     vmspace_add_free(space, USER_START, USER_END - USER_START);
@@ -22,6 +23,8 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
 
+    u32 key = irq_spin_take(&space->lock);
+
     // search addr_list, looking for the first range after the new region
     dlnode_t  * dl   = space->ranges.head;
     vmrange_t * prev = NULL;
@@ -34,6 +37,7 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
         }
         if (next->addr + next->size > addr) {
             // overlap with existing range
+            irq_spin_give(&space->lock, key);
             return ERROR;
         }
         prev = next;
@@ -76,6 +80,7 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
         dl_insert_before(&space->ranges, &range->dl, dl);
     }
 
+    irq_spin_give(&space->lock, key);
     return OK;
 }
 
@@ -83,6 +88,8 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
 int vmspace_add_used(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
+
+    u32 key = irq_spin_take(&space->lock);
 
     // search addr_list, looking for the first range after the new resion
     dlnode_t  * dl   = space->ranges.head;
@@ -94,6 +101,7 @@ int vmspace_add_used(vmspace_t * space, usize addr, usize size) {
         }
         if (next->addr + next->size > addr) {
             // overlap with existing range
+            irq_spin_give(&space->lock, key);
             return ERROR;
         }
     }
@@ -107,11 +115,14 @@ int vmspace_add_used(vmspace_t * space, usize addr, usize size) {
     range->pages = NO_PAGE;
     dl_insert_before(&space->ranges, &range->dl, dl);
 
+    irq_spin_give(&space->lock, key);
     return OK;
 }
 
 vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
+
+    u32 key = irq_spin_take(&space->lock);
 
     // search for the smallest free range that is large enough
     usize       min_size  = (usize) -1;
@@ -130,6 +141,7 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
     }
 
     if (NULL == min_range) {
+        irq_spin_give(&space->lock, key);
         return NULL;
     }
 
@@ -145,6 +157,8 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
 
     min_range->size = size;
     min_range->type = RT_USED;
+
+    irq_spin_give(&space->lock, key);
     return min_range;
 }
 
@@ -152,6 +166,7 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
 
+    u32   key = irq_spin_take(&space->lock);
     usize end = addr + size;
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
@@ -190,14 +205,20 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
         range->addr= addr;
         range->size = size;
         range->type = RT_USED;
+
+        irq_spin_give(&space->lock, key);
         return range;
     }
 
+    irq_spin_give(&space->lock, key);
     return NULL;
 }
 
 void vmspace_free(vmspace_t * space, vmrange_t * range) {
     dbg_assert(RT_USED == range->type);
+
+    u32 key = irq_spin_take(&space->lock);
+
     range->size = range->size;
     range->type = RT_FREE;
 
@@ -219,6 +240,8 @@ void vmspace_free(vmspace_t * space, vmrange_t * range) {
             dl_remove(&space->ranges, &next->dl);
         }
     }
+
+    irq_spin_give(&space->lock, key);
 }
 
 // check whether the given range is free
@@ -226,6 +249,7 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
     dbg_assert((addr & (PAGE_SIZE - 1)) == 0);
     dbg_assert((size & (PAGE_SIZE - 1)) == 0);
 
+    u32   key = irq_spin_take(&space->lock);
     usize end = addr + size;
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
@@ -241,10 +265,12 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
         }
 
         // found a valid range
+        irq_spin_give(&space->lock, key);
         return YES;
     }
 
     // no such range, or range is not free
+    irq_spin_give(&space->lock, key);
     return NO;
 }
 
@@ -252,10 +278,13 @@ int vmrange_map(vmspace_t * space, vmrange_t * range) {
     dbg_assert(RT_USED == range->type);
     dbg_assert(NO_PAGE == range->pages);
 
-    int page_count = range->size >> PAGE_SHIFT;
-    for (int i = 0; i < page_count; ++i) {
+    u32   key        = irq_spin_take(&space->lock);
+    usize page_count = range->size >> PAGE_SHIFT;
+
+    for (usize i = 0; i < page_count; ++i) {
         pfn_t p = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
         if (NO_PAGE == p) {
+            irq_spin_give(&space->lock, key);
             return ERROR;
         }
         page_array[p].next = range->pages;
@@ -266,11 +295,15 @@ int vmrange_map(vmspace_t * space, vmrange_t * range) {
         mmu_map(space->ctx, va, pa, 1, 0);
     }
 
+    irq_spin_give(&space->lock, key);
     return OK;
 }
 
 void vmrange_unmap(vmspace_t * space, vmrange_t * range) {
+    u32 key = irq_spin_take(&space->lock);
+
     if (RT_USED != range->type) {
+        irq_spin_give(&space->lock, key);
         return;
     }
 
@@ -283,4 +316,10 @@ void vmrange_unmap(vmspace_t * space, vmrange_t * range) {
         p = page_array[p].next;
     }
     range->pages = NO_PAGE;
+
+    irq_spin_give(&space->lock, key);
+}
+
+__INIT void vmspace_lib_init() {
+    pool_init(&range_pool, sizeof(vmrange_t));
 }

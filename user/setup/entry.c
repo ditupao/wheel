@@ -36,7 +36,7 @@ void _entry() {
 
     syscall2();
 
-    syscall(SYS_SPAWN, another_thread_func);
+    // syscall(SYS_SPAWN, another_thread_func);
 
     // syscall(SYS_EXIT, 0);
     syscall(SYS_WRITE, "already deleted!\r\n");

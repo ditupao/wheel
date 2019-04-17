@@ -34,6 +34,28 @@ typedef struct elf64_dyn {
 #define DT_JMPREL   23
 #define DT_ENCODING 32
 
+// // TODO: we can change filename to vmobject, and use ELF64
+// //       as the only file format for applications.
+// // TODO: rename function as vmobject_load.
+
+// // represent a loaded elf file
+// // TODO: add file name, and a hashtable to map file to vmobject
+// typedef struct vmobject {
+//     dllist_t    segments;
+// } vmobject_t;
+
+// // represent a segment in the vmobject
+// typedef struct vmsegment {
+//     dlnode_t dl;
+//     usize    vaddr;     // prefered virtual address
+//     usize    size;
+//     u32      flags;
+//     pfn_t    pages;     // (single linked list) mapped page
+// } vmsegment_t;
+
+// static pool_t obj_pool;
+// static pool_t seg_pool;
+
 // load an elf file into the context of current process
 // and start executing the code in it (current task)
 int elf64_load(u8 * elf, usize len) {
@@ -57,10 +79,10 @@ int elf64_load(u8 * elf, usize len) {
     }
 
     // get program header table's offset
-    if ((hdr->e_phoff     == 0) ||
-        (hdr->e_phnum     == 0) ||
-        (hdr->e_phentsize == 0) ||
-        (hdr->e_phoff >= len)   ||
+    if ((hdr->e_phoff     ==   0) ||
+        (hdr->e_phnum     ==   0) ||
+        (hdr->e_phentsize ==   0) ||
+        (hdr->e_phoff     >= len) ||
         (hdr->e_phoff + hdr->e_phentsize * hdr->e_phnum >= len)) {
         // segments table not exist
         return ERROR;
@@ -70,19 +92,45 @@ int elf64_load(u8 * elf, usize len) {
     process_t * pid = thiscpu_var(tid_prev)->process;
     vmspace_t * vm  = &pid->vm;
 
-    // all vm ranges allocated for this elf
-    vmrange_t * ranges[hdr->e_phnum];
-    memset(ranges, 0, hdr->e_phnum * sizeof(vmrange_t *));
+    usize page_required = 0;
 
-    // loop through each segment, allocate space, and load the content
+    // loop through each segment, make sure vm range is usable
     for (int i = 0; i < hdr->e_phnum; ++i) {
         elf64_phdr_t * phdr = (elf64_phdr_t *) (elf + hdr->e_phoff + i * hdr->e_phentsize);
         if (PT_LOAD != phdr->p_type) {
             continue;
         }
 
+        // align segment to page boundry
         usize vm_start = ROUND_DOWN(phdr->p_vaddr, PAGE_SIZE);
         usize vm_end   = ROUND_UP(phdr->p_vaddr + phdr->p_memsz, PAGE_SIZE);
+        if (YES != vmspace_is_free(vm, vm_start, vm_end)) {
+            return ERROR;
+        }
+
+        page_required += (vm_end - vm_start) >> PAGE_SHIFT;
+    }
+
+    // check if there's enough free page
+    if (free_page_count(ZONE_NORMAL) < page_required) {
+        return ERROR;
+    }
+
+    // all vm ranges allocated for this elf
+    vmrange_t * ranges[hdr->e_phnum];
+    memset(ranges, 0, hdr->e_phnum * sizeof(vmrange_t *));
+
+    // loop through each segment again, allocate space and load the content
+    for (int i = 0; i < hdr->e_phnum; ++i) {
+        elf64_phdr_t * phdr = (elf64_phdr_t *) (elf + hdr->e_phoff + i * hdr->e_phentsize);
+        if (PT_LOAD != phdr->p_type) {
+            continue;
+        }
+
+        // align segment to page boundry
+        usize vm_start = ROUND_DOWN(phdr->p_vaddr, PAGE_SIZE);
+        usize vm_end   = ROUND_UP  (phdr->p_vaddr + phdr->p_memsz, PAGE_SIZE);
+
         ranges[i] = vmspace_alloc_at(vm, vm_start, vm_end - vm_start);
         if (NULL == ranges[i]) {
             goto error;
@@ -96,17 +144,28 @@ int elf64_load(u8 * elf, usize len) {
     }
 
     pid->entry = hdr->e_entry;
-    return OK;
 
-    // // get section header table's offset
-    // if ((hdr->e_shoff     == 0) ||
-    //     (hdr->e_shnum     == 0) ||
-    //     (hdr->e_shentsize == 0) ||
-    //     (hdr->e_shoff >= len)   ||
-    //     (hdr->e_shoff + hdr->e_shentsize * hdr->e_shnum >= len)) {
-    //     // TODO: if no section table, we should assume no relocation info and proceed
-    //     return ERROR;
-    // }
+    // get section header table's offset
+    if ((hdr->e_shoff     ==   0) ||
+        (hdr->e_shnum     ==   0) ||
+        (hdr->e_shentsize ==   0) ||
+        (hdr->e_shoff     >= len) ||
+        (hdr->e_shoff + hdr->e_shentsize * hdr->e_shnum >= len)) {
+        // TODO: if no section table, we should assume no relocation info and proceed
+        return OK;
+    }
+
+    for (int i = 0; i < hdr->e_shnum; ++i) {
+        elf64_shdr_t * shdr = (elf64_shdr_t *) (elf + hdr->e_shoff + i * hdr->e_shentsize);
+        if (SHT_REL == shdr->sh_type) {
+            //
+        }
+        if (SHT_RELA == shdr->sh_type) {
+            //
+        }
+    }
+
+    return OK;
 
 error:
     for (int i = 0; i < hdr->e_phnum; ++i) {
@@ -118,3 +177,8 @@ error:
     }
     return ERROR;
 }
+
+// __INIT void load_lib_init() {
+//     pool_init(&obj_pool, sizeof(vmobject_t));
+//     pool_init(&seg_pool, sizeof(vmsegment_t));
+// }

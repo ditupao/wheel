@@ -186,6 +186,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     work_lib_init();
     tick_lib_init();
     task_lib_init();
+    vmspace_lib_init();
 
     // init kernel address mapping and init process
     kernel_ctx_init();

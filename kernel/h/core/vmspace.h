@@ -3,16 +3,19 @@
 
 #include <base.h>
 
+// represents a process
 typedef struct vmspace {
+    spin_t   lock;
     usize    ctx;
     dllist_t ranges;
 } vmspace_t;
 
+// represents a continuous range in the process 
 typedef struct vmrange {
     dlnode_t dl;        // node in vmspace.ranges
-    usize    addr;
-    usize    size;
-    u32      type;
+    usize    addr;      // start address, aligned to page size
+    usize    size;      // range size, aligned to page size
+    u32      type;      // free or used
     pfn_t    pages;     // (single linked list) mapped page
 } vmrange_t;
 
@@ -29,5 +32,7 @@ extern void        vmspace_free    (vmspace_t * space, vmrange_t * range);
 extern int         vmspace_is_free (vmspace_t * space, usize addr, usize size);
 extern int         vmrange_map     (vmspace_t * space, vmrange_t * range);
 extern void        vmrange_unmap   (vmspace_t * space, vmrange_t * range);
+
+extern __INIT void vmspace_lib_init();
 
 #endif // CORE_VMSPACE_H

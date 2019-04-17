@@ -229,11 +229,11 @@ void page_range_free(pfn_t rng, u32 count) {
 }
 
 pfn_t page_alloc(u32 zones) {
-    return NO_PAGE;
+    return page_block_alloc(zones, 0);
 }
 
 void page_free(pfn_t page) {
-    return;
+    page_block_free(page, 0);
 }
 
 usize free_page_count(u32 zones) {
@@ -278,6 +278,99 @@ void dump_page_layout(u32 zones) {
         dbg_print("== zone highmem:\r\n");
         dump_layout(&zone_highmem);
     }
+}
+
+//------------------------------------------------------------------------------
+// page list operations
+
+void pglist_push_head(pglist_t * list, pfn_t page) {
+    u32 key = irq_spin_take(&list->lock);
+    page_array[page].prev = NO_PAGE;
+    page_array[page].next = list->head;
+    if (NO_PAGE != list->head) {
+        page_array[list->head].prev = page;
+    } else {
+        list->tail = page;
+    }
+    list->head = page;
+    irq_spin_give(&list->lock, key);
+}
+
+void pglist_push_tail(pglist_t * list, pfn_t page) {
+    u32 key = irq_spin_take(&list->lock);
+    page_array[page].prev = list->tail;
+    page_array[page].next = NO_PAGE;
+    if (NO_PAGE != list->tail) {
+        page_array[list->tail].next = page;
+    } else {
+        list->head = page;
+    }
+    list->tail = page;
+    irq_spin_give(&list->lock, key);
+}
+
+pfn_t pglist_pop_head (pglist_t * list) {
+    u32 key = irq_spin_take(&list->lock);
+    pfn_t head = list->head;
+    if (NO_PAGE != head) {
+        list->head = page_array[head].next;
+    }
+    if (NO_PAGE == list->head) {
+        list->tail = NO_PAGE;
+    }
+    irq_spin_give(&list->lock, key);
+    return head;
+}
+
+pfn_t pglist_pop_tail (pglist_t * list) {
+    u32 key = irq_spin_take(&list->lock);
+    pfn_t tail = list->tail;
+    if (NO_PAGE != tail) {
+        list->tail = page_array[tail].prev;
+    }
+    if (NO_PAGE == list->tail) {
+        list->head = NO_PAGE;
+    }
+    irq_spin_give(&list->lock, key);
+    return tail;
+}
+
+void pglist_join_head(pglist_t * list, pglist_t * from) {
+    u32 key = irq_spin_take(&list->lock);
+    raw_spin_take(&from->lock);
+
+    if ((NO_PAGE != from->head) && (NO_PAGE != from->tail)) {
+        page_array[from->tail].next = list->head;
+    }
+    if ((NO_PAGE != list->head) && (NO_PAGE != list->tail)) {
+        page_array[list->head].prev = from->tail;
+    }
+
+    list->head = from->head;
+    from->head = NO_PAGE;
+    from->tail = NO_PAGE;
+
+    raw_spin_give(&from->lock);
+    irq_spin_give(&list->lock, key);
+}
+
+void pglist_join_tail(pglist_t * list, pglist_t * from) {
+    u32 key = irq_spin_take(&list->lock);
+    raw_spin_take(&from->lock);
+
+    if ((NO_PAGE != from->head) && (NO_PAGE != from->tail)) {
+        page_array[from->head].prev = list->tail;
+    }
+    if ((NO_PAGE != list->head) && (NO_PAGE != list->tail)) {
+        page_array[list->tail].next = from->head;
+    }
+
+    list->tail = from->tail;
+    from->head = NO_PAGE;
+    from->tail = NO_PAGE;
+
+    raw_spin_give(&from->lock);
+    irq_spin_give(&list->lock, key);
 }
 
 //------------------------------------------------------------------------------

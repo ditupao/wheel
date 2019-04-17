@@ -288,11 +288,10 @@ static void root_proc() {
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     if (OK == elf64_load(bin_addr, bin_size)) {
         // allocate stack space for user-mode stack
-        pfn_t uframe = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
-        u64   ustack = (u64) phys_to_virt((usize) uframe << PAGE_SHIFT);
-
         process_t * pid = thiscpu_var(tid_prev)->process;
-        enter_user(pid->entry, ustack + PAGE_SIZE);
+        vmrange_t * stk = vmspace_alloc(&pid->vm, 16 * PAGE_SIZE);
+        vmrange_map(&pid->vm, stk);
+        enter_user(pid->entry, stk->addr + 16 * PAGE_SIZE);
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }

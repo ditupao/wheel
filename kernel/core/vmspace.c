@@ -129,7 +129,7 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
     vmrange_t * min_range = NULL;
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if ((RT_FREE != range->type) &&
+        if ((RT_FREE != range->type) ||
             (size     > range->size)) {
             continue;
         }
@@ -171,7 +171,7 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
 
     for (dlnode_t * dl = space->ranges.head; NULL != dl; dl = dl->next) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        if ((RT_FREE != range->type) &&
+        if ((RT_FREE != range->type) ||
             (end > range->addr + range->size)) {
             continue;
         }

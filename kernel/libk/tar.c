@@ -23,6 +23,7 @@ void tar_find(u8 * tar, const char * name, u8 ** buff, usize * size) {
     *size = 0;
 
     usize offset = 0;
+    usize len    = 0;
     while (1) {
         tar_hdr_t * hdr = (tar_hdr_t *) (tar + offset);
 
@@ -36,7 +37,7 @@ void tar_find(u8 * tar, const char * name, u8 ** buff, usize * size) {
         }
 
 pass:
-        usize len = 0;
+        len = 0;
         for (int i = 0; (i < 12) && (hdr->size[i] != '\0'); ++i) {
             len *= 8;
             len += hdr->size[i] - '0';
@@ -54,6 +55,7 @@ pass:
 
 void tar_dump(u8 * tar) {
     usize offset = 0;
+    usize len    = 0;
     while (1) {
         tar_hdr_t * hdr = (tar_hdr_t *) (tar + offset);
 
@@ -66,7 +68,7 @@ void tar_dump(u8 * tar) {
             return; // we've found end-of-archive
         }
 pass:
-        usize len = 0;
+        len = 0;
         for (int i = 0; (i < 12) && (hdr->size[i] != '\0'); ++i) {
             len *= 8;
             len += hdr->size[i] - '0';

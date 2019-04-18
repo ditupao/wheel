@@ -20,12 +20,12 @@ void another_thread_func() {
 }
 
 void _entry() {
-    char * video = (char *) (0xb8000 + 0xffff800000000000UL);
-    char * msg   = "hello from user mode.";
-    for (int i = 0; msg[i]; ++i) {
-        video[2 * i + 0] = msg[i];
-        video[2 * i + 1] = 0x4e;
-    }
+    // char * video = (char *) (0xb8000 + 0xffff800000000000UL);
+    // char * msg   = "hello from user mode.";
+    // for (int i = 0; msg[i]; ++i) {
+    //     video[2 * i + 0] = msg[i];
+    //     video[2 * i + 1] = 0x4e;
+    // }
 
     unsigned int ret = syscall(SYS_MAGIC, NULL);
     if (0xdeadbeef == ret) {

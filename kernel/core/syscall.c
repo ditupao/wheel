@@ -22,14 +22,6 @@ __NORETURN void thread_entry(void * entry) {
     vmrange_t * range = vmspace_alloc(&self->process->vm, 16 * PAGE_SIZE);
     vmspace_map(&self->process->vm, range);
 
-    dbg_print("new thread stack pages:");
-    pfn_t p = range->pages.head;
-    while (NO_PAGE != p) {
-        dbg_print(" %x:%d", p, page_array[p].order);
-        p = page_array[p].next;
-    }
-    dbg_print(".\r\n");
-
     dbg_assert(NULL == self->ustack);
     self->ustack = range;
 

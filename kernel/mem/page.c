@@ -317,7 +317,7 @@ void pglist_free_all(pglist_t * list) {
     while (NO_PAGE != list->head) {
         dbg_assert(1 == page_array[list->head].block);
         pfn_t next = page_array[list->head].next;
-        page_block_free(list->head, page_array[list->head].block);
+        page_block_free(list->head, page_array[list->head].order);
         list->head = next;
     }
     list->tail = NO_PAGE;

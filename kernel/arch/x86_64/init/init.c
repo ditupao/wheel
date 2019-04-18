@@ -292,14 +292,6 @@ static void root_proc() {
         vmrange_t * stk = vmspace_alloc(vm, 16 * PAGE_SIZE);
         vmspace_map(vm, stk);
 
-        dbg_print("init stack pages:");
-        pfn_t p = stk->pages.head;
-        while (NO_PAGE != p) {
-            dbg_print(" %x:%d", p, page_array[p].order);
-            p = page_array[p].next;
-        }
-        dbg_print(".\r\n");
-
         dbg_assert(NULL == tid->ustack);
         tid->ustack = stk;
 

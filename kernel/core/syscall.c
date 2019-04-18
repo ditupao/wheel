@@ -15,32 +15,23 @@
 
 #define SYS_MAGIC   255
 
-// // exit current process
-// static void syscall_exit(int code) {
-//     process_t * pid = thiscpu_var(tid_prev)->process;
-
-//     // stop all child task (except this one)
-// }
-
-void sys_exit() {
-    task_exit();
-}
-
 typedef int (* thread_proc_t) ();
 
 __NORETURN void thread_entry(void * entry) {
-    // pfn_t    frame = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4); // 64K
-    // usize    stack = (usize) phys_to_virt((usize) frame << PAGE_SHIFT);
-    task_t * self  = thiscpu_var(tid_prev);
-
-    // // prepare for user stack
-    // page_array[frame].block = 1;
-    // page_array[frame].order = 4;
-    // page_array[frame].next  = self->pages;
-    // self->pages             = frame;
-
+    task_t    * self  = thiscpu_var(tid_prev);
     vmrange_t * range = vmspace_alloc(&self->process->vm, 16 * PAGE_SIZE);
-    vmrange_map(&self->process->vm, range);
+    vmspace_map(&self->process->vm, range);
+
+    dbg_print("new thread stack pages:");
+    pfn_t p = range->pages.head;
+    while (NO_PAGE != p) {
+        dbg_print(" %x:%d", p, page_array[p].order);
+        p = page_array[p].next;
+    }
+    dbg_print(".\r\n");
+
+    dbg_assert(NULL == self->ustack);
+    self->ustack = range;
 
     enter_user((usize) entry, range->addr + 16 * PAGE_SIZE);
 

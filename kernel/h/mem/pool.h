@@ -1,5 +1,5 @@
-#ifndef CORE_POOL_H
-#define CORE_POOL_H
+#ifndef MEM_POOL_H
+#define MEM_POOL_H
 
 #include <base.h>
 #include <core/spin.h>
@@ -24,4 +24,4 @@ extern void pool_shrink (pool_t * pool);
 extern void * pool_obj_alloc(pool_t * pool);
 extern void   pool_obj_free (pool_t * pool, void * obj);
 
-#endif // CORE_POOL_H
+#endif // MEM_POOL_H

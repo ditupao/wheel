@@ -2,7 +2,7 @@
 #define CORE_SEMAPHORE_H
 
 #include <base.h>
-#include "spin.h"
+#include <core/spin.h>
 #include <libk/list.h>
 
 typedef struct semaphore {

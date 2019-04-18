@@ -5,7 +5,7 @@ BINFILE :=  $(OUTDIR)/wheel.bin
 MAPFILE :=  $(OUTDIR)/wheel.map
 SYMFILE :=  $(OUTDIR)/wheel.sym
 
-DIRS    :=  arch/$(ARCH) core libk
+DIRS    :=  arch/$(ARCH) core mem libk
 SRCS    :=  $(foreach d,$(DIRS),$(shell find $(d) -name '*.S' -o -name '*.c'))
 OBJS    :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCS))
 DEPS    :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJS)))

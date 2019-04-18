@@ -2,10 +2,12 @@
 #define CORE_TASK_H
 
 #include <base.h>
-#include "spin.h"
-#include "process.h"
+#include <core/spin.h>
+#include <core/process.h>
+#include <mem/page.h>
 #include <libk/list.h>
 
+// task control block
 typedef struct task {
     regs_t      regs;           // arch-specific status
     spin_t      lock;           // spinlock used in state-switching
@@ -15,7 +17,8 @@ typedef struct task {
     int         cpu_idx;        // must < cpu_installed, could use shorter type
     int         timeslice;      // total timeslice
     int         remaining;      // remaining timeslice
-    pfn_t       pages;          // kernel stack page list
+    pglist_t    kstack;         // kernel stack page list
+    vmrange_t * ustack;         // user stack region
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
     dlnode_t    dl_proc;        // node in process

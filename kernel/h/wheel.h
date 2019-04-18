@@ -5,18 +5,16 @@
 #include <arch.h>
 
 #include <core/spin.h>
-#include <core/page.h>
-#include <core/pool.h>
 #include <core/work.h>
 #include <core/tick.h>
-
 #include <core/task.h>
 #include <core/semaphore.h>
-
-#include <core/vmspace.h>
 #include <core/process.h>
-
 #include <core/elf64.h>
+
+#include <mem/page.h>
+#include <mem/pool.h>
+#include <mem/vmspace.h>
 
 #include <libk/ctype.h>
 #include <libk/string.h>

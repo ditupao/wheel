@@ -111,17 +111,17 @@ static __INITDATA mb_info_t mbi;
 extern usize kernel_ctx;
 
 // init process, root task and idle tasks
-static            process_t init_pcb;
-static __INITDATA task_t  * root_tid;
-static __PERCPU   task_t  * idle_tid;
+static            process_t * init_pid;
+static __INITDATA task_t    * root_tid;
+static __PERCPU   task_t    * idle_tid;
 
 // forward declarations
 static void root_proc();
 static void idle_proc();
 
-// for test only
-semaphore_t sem_tst;
-wdog_t      wd_tst;
+// // for test only
+// semaphore_t sem_tst;
+// wdog_t      wd_tst;
 
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // enable early debug output
@@ -187,15 +187,12 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     tick_lib_init();
     task_lib_init();
     vmspace_lib_init();
+    process_lib_init();
 
     // init kernel address mapping and init process
     kernel_ctx_init();
-    process_init(&init_pcb);
-    mmu_ctx_set(init_pcb.vm.ctx);
-
-    // binary semaphore, a.k.a. mutex
-    semaphore_init(&sem_tst, 1, 1);
-    wdog_init(&wd_tst);
+    init_pid = process_create();
+    mmu_ctx_set(init_pid->vm.ctx);
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
@@ -203,11 +200,11 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for root and idle-0
-    root_tid = task_create(&init_pcb, 10, 0, root_proc, 0,0,0,0);
-    thiscpu_var(idle_tid) = task_create(&init_pcb, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+    root_tid = task_create(init_pid, 10, 0, root_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(init_pid, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
-    dbg_print("processor %02d started.\r\n", cpu_activated);
+    dbg_print("> cpu %02d started.\r\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
     task_resume(thiscpu_var(idle_tid));
     task_resume(root_tid);
@@ -233,10 +230,10 @@ __INIT __NORETURN void sys_init_ap() {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for idle task
-    thiscpu_var(idle_tid) = task_create(&init_pcb, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(init_pid, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
     // activate idle-x, and switch task manually
-    dbg_print("processor %02d started.\r\n", cpu_activated);
+    dbg_print("> cpu %02d started.\r\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
     task_resume(thiscpu_var(idle_tid));             // won't preempt
     thiscpu_var(tid_next) = thiscpu_var(idle_tid);
@@ -288,17 +285,32 @@ static void root_proc() {
     usize bin_size = (usize) (&_init_end - &_ramfs_addr);
     if (OK == elf64_load(bin_addr, bin_size)) {
         // allocate stack space for user-mode stack
-        process_t * pid = thiscpu_var(tid_prev)->process;
-        vmrange_t * stk = vmspace_alloc(&pid->vm, 16 * PAGE_SIZE);
-        vmrange_map(&pid->vm, stk);
+        task_t    * tid = thiscpu_var(tid_prev);
+        process_t * pid = tid->process;
+        vmspace_t * vm  = &pid->vm;
+
+        vmrange_t * stk = vmspace_alloc(vm, 16 * PAGE_SIZE);
+        vmspace_map(vm, stk);
+
+        dbg_print("init stack pages:");
+        pfn_t p = stk->pages.head;
+        while (NO_PAGE != p) {
+            dbg_print(" %x:%d", p, page_array[p].order);
+            p = page_array[p].next;
+        }
+        dbg_print(".\r\n");
+
+        dbg_assert(NULL == tid->ustack);
+        tid->ustack = stk;
+
         enter_user(pid->entry, stk->addr + 16 * PAGE_SIZE);
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }
 #endif
 
-    tid_a = task_create(&init_pcb, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
-    tid_b = task_create(&init_pcb, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
+    tid_a = task_create(init_pid, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
+    tid_b = task_create(init_pid, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
     task_resume(tid_a);
     task_resume(tid_b);
 
@@ -327,7 +339,7 @@ static void idle_proc() {
     task_t * tid = thiscpu_var(tid_prev);
     raw_spin_take(&tid->lock);
 
-    dbg_print("<idle-%d>", cpu_index());
+    // dbg_print("<idle-%d>", cpu_index());
     while (1) {
         ASM("hlt");
     }

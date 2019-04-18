@@ -135,7 +135,7 @@ int elf64_load(u8 * elf, usize len) {
         if (NULL == ranges[i]) {
             goto error;
         }
-        if (vmrange_map(vm, ranges[i])) {
+        if (vmspace_map(vm, ranges[i])) {
             goto error;
         }
 
@@ -172,7 +172,7 @@ error:
         if (NULL == ranges[i]) {
             continue;
         }
-        vmrange_unmap(vm, ranges[i]);
+        vmspace_unmap(vm, ranges[i]);
         vmspace_free(vm, ranges[i]);
     }
     return ERROR;

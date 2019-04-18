@@ -121,24 +121,21 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
     // allocate
     task_t * tid = pool_obj_alloc(&tcb_pool);
 
-    // allocate space for kernel stack
-    pfn_t pn = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
-    if (NO_PAGE == pn) {
+    // allocate space for kernel stack, must be continuous
+    pfn_t pstk = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
+    if (NO_PAGE == pstk) {
         // memory not enough, cannot create task
         return NULL;
     }
 
     // mark allocated page as kstack type
     for (pfn_t i = 0; i < 16; ++i) {
-        page_array[pn + i].type  = PT_KSTACK;
-        page_array[pn + i].block = 0;
+        page_array[pstk + i].type  = PT_KSTACK;
+        page_array[pstk + i].block = 0;
     }
-    page_array[pn].block = 1;
-    page_array[pn].order = 4;
-    page_array[pn].next  = NO_PAGE;
 
-    usize va = (usize) phys_to_virt((usize) pn << PAGE_SHIFT);
-    regs_init(&tid->regs, pid->vm.ctx, va + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+    usize vstk = (usize) phys_to_virt((usize) pstk << PAGE_SHIFT);
+    regs_init(&tid->regs, pid->vm.ctx, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
     tid->lock      = SPIN_INIT;
     tid->state     = TS_SUSPEND;
@@ -147,11 +144,16 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
     tid->cpu_idx   = cpu_idx;
     tid->timeslice = 200;   // TODO: put default timeslice in config
     tid->remaining = 200;
-    tid->pages     = pn;
+    tid->kstack    = PGLIST_INIT;
+    tid->ustack    = NULL;
     tid->dl_sched  = DLNODE_INIT;
     tid->queue     = NULL;
     tid->dl_proc   = DLNODE_INIT;
     tid->process   = pid;
+
+    page_array[pstk].block = 1;
+    page_array[pstk].order = 4;
+    pglist_push_head(&tid->kstack, pstk);
 
     // put the task into process, and update resource list
     u32 key = irq_spin_take(&pid->lock);
@@ -165,13 +167,21 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
 static void task_cleanup(task_t * tid) {
     dbg_assert(TS_ZOMBIE == tid->state);
 
-    // free all pages
-    // TODO: also signal parent for finish
-    while (NO_PAGE != tid->pages) {
-        pfn_t next = page_array[tid->pages].next;
-        page_block_free(tid->pages, page_array[tid->pages].block);
-        tid->pages = next;
+    // unmap and remove vm region for user stack
+    vmspace_unmap(&tid->process->vm, tid->ustack);
+    vmspace_free (&tid->process->vm, tid->ustack);
+    tid->ustack = NULL;
+
+    // free all pages in kernel stack
+    pglist_free_all(&tid->kstack);
+
+    dl_remove(&tid->process->tasks, &tid->dl_proc);
+    if ((NULL == tid->process->tasks.head) &&
+        (NULL == tid->process->tasks.tail)) {
+        process_delete(tid->process);
     }
+
+    // TODO: also signal parent for finish
 
     pool_obj_free(&tcb_pool, tid);
 }

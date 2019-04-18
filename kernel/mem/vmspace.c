@@ -13,7 +13,7 @@ void vmspace_destroy(vmspace_t * space) {
     dlnode_t * dl;
     while (NULL != (dl = dl_pop_head(&space->ranges))) {
         vmrange_t * range = PARENT(dl, vmrange_t, dl);
-        vmrange_unmap(space, range);
+        vmspace_unmap(space, range);
         pool_obj_free(&range_pool, range);
     }
 }
@@ -76,7 +76,7 @@ int vmspace_add_free(vmspace_t * space, usize addr, usize size) {
         range->addr  = addr;
         range->size  = size;
         range->type  = RT_FREE;
-        range->pages = NO_PAGE;
+        range->pages = PGLIST_INIT;
         dl_insert_before(&space->ranges, &range->dl, dl);
     }
 
@@ -112,7 +112,7 @@ int vmspace_add_used(vmspace_t * space, usize addr, usize size) {
     range->addr  = addr;
     range->size  = size;
     range->type  = RT_USED;
-    range->pages = NO_PAGE;
+    range->pages = PGLIST_INIT;
     dl_insert_before(&space->ranges, &range->dl, dl);
 
     irq_spin_give(&space->lock, key);
@@ -151,7 +151,7 @@ vmrange_t * vmspace_alloc(vmspace_t * space, usize size) {
         rest->addr  = min_range->addr + min_range->size;
         rest->size  = min_range->size - size;
         rest->type  = RT_FREE;
-        rest->pages = NO_PAGE;
+        rest->pages = PGLIST_INIT;
         dl_insert_after(&space->ranges, &rest->dl, &min_range->dl);
     }
 
@@ -188,7 +188,7 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
             prev->addr  = range->addr;
             prev->size  = addr - range->addr;
             prev->type  = RT_FREE;
-            prev->pages = NO_PAGE;
+            prev->pages = PGLIST_INIT;
             dl_insert_before(&space->ranges, &prev->dl, dl);
         }
 
@@ -198,7 +198,7 @@ vmrange_t * vmspace_alloc_at(vmspace_t * space, usize addr, usize size) {
             next->addr  = end;
             next->size  = range->addr + range->size - end;
             next->type  = RT_FREE;
-            next->pages = NO_PAGE;
+            next->pages = PGLIST_INIT;
             dl_insert_after(&space->ranges, &next->dl, dl);
         }
 
@@ -274,9 +274,10 @@ int vmspace_is_free(vmspace_t * space, usize addr, usize size) {
     return NO;
 }
 
-int vmrange_map(vmspace_t * space, vmrange_t * range) {
+int vmspace_map(vmspace_t * space, vmrange_t * range) {
     dbg_assert(RT_USED == range->type);
-    dbg_assert(NO_PAGE == range->pages);
+    dbg_assert(NO_PAGE == range->pages.head);
+    dbg_assert(NO_PAGE == range->pages.tail);
 
     u32   key        = irq_spin_take(&space->lock);
     usize page_count = range->size >> PAGE_SHIFT;
@@ -284,11 +285,14 @@ int vmrange_map(vmspace_t * space, vmrange_t * range) {
     for (usize i = 0; i < page_count; ++i) {
         pfn_t p = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
         if (NO_PAGE == p) {
+            pglist_free_all(&range->pages);
             irq_spin_give(&space->lock, key);
             return ERROR;
         }
-        page_array[p].next = range->pages;
-        range->pages = p;
+
+        page_array[p].block = 1;
+        page_array[p].order = 0;
+        pglist_push_head(&range->pages, p);
 
         usize va = range->addr + PAGE_SIZE * i;
         usize pa = (usize) p << PAGE_SHIFT;
@@ -299,7 +303,7 @@ int vmrange_map(vmspace_t * space, vmrange_t * range) {
     return OK;
 }
 
-void vmrange_unmap(vmspace_t * space, vmrange_t * range) {
+void vmspace_unmap(vmspace_t * space, vmrange_t * range) {
     u32 key = irq_spin_take(&space->lock);
 
     if (RT_USED != range->type) {
@@ -310,12 +314,7 @@ void vmrange_unmap(vmspace_t * space, vmrange_t * range) {
     int page_count = range->size >> PAGE_SHIFT;
     mmu_unmap(space->ctx, range->addr, page_count);
 
-    pfn_t p = range->pages;
-    while (NO_PAGE != p) {
-        page_block_free(p, 0);
-        p = page_array[p].next;
-    }
-    range->pages = NO_PAGE;
+    pglist_free_all(&range->pages);
 
     irq_spin_give(&space->lock, key);
 }

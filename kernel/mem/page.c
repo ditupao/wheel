@@ -3,15 +3,10 @@
 page_t * page_array = NULL;     // start of page descriptors
 usize    page_count = 0;        // number of page descriptors
 
-typedef struct level {
-    pfn_t head;
-    pfn_t tail;
-} level_t;
-
 typedef struct zone {
-    spin_t  lock;
-    usize   page_count;
-    level_t list[ORDER_COUNT];  // block list of each order
+    spin_t   lock;
+    usize    page_count;
+    pglist_t list[ORDER_COUNT]; // block list of each order
 } zone_t;
 
 static zone_t zone_dma;
@@ -21,7 +16,7 @@ static zone_t zone_highmem;
 //------------------------------------------------------------------------------
 // allocate a block from zone, no spinlock protection
 
-static pfn_t zone_block_alloc(zone_t * zone, u32 order) {
+static pfn_t zone_block_alloc(zone_t * zone, int order) {
     for (int o = order; o < ORDER_COUNT; ++o) {
         if ((NO_PAGE == zone->list[o].head) &&
             (NO_PAGE == zone->list[o].tail)) {
@@ -30,33 +25,18 @@ static pfn_t zone_block_alloc(zone_t * zone, u32 order) {
         }
 
         // found an order with free block, remove its first element
-        pfn_t blk  = zone->list[o].head;
-        pfn_t next = page_array[blk].next;
-        zone->list[o].head = next;
-        if (NO_PAGE == next) {
-            zone->list[o].tail = NO_PAGE;
-        } else {
-            page_array[next].prev = NO_PAGE;
-        }
+        pfn_t blk = pglist_pop_head(&zone->list[o]);
 
         // split the block, and return the second half back
         // return second half, so base address remain unchanged
-        for (; o > (int) order; --o) {
-            usize size = 1U << (o - 1);
+        for (; o > order; --o) {
+            usize size = 1UL << (o - 1);
             pfn_t bud  = blk ^ size;
             page_array[bud].block = 1;
             page_array[bud].order = o - 1;
 
-            // return buddy
-            pfn_t head = zone->list[o - 1].head;
-            page_array[bud].prev = NO_PAGE;
-            page_array[bud].next = head;
-            zone->list[o - 1].head   = bud;
-            if (NO_PAGE == head) {
-                zone->list[o - 1].tail = bud;
-            } else {
-                page_array[head].prev = bud;
-            }
+            // return buddy block to the list
+            pglist_push_head(&zone->list[o-1], bud);
         }
 
         // mark this block as allocated
@@ -65,6 +45,9 @@ static pfn_t zone_block_alloc(zone_t * zone, u32 order) {
         for (pfn_t i = 0; i < size; ++i) {
             page_array[blk + i].type = PT_KERNEL;
         }
+
+        page_array[blk].block = 1;
+        page_array[blk].order = 1;
         return blk;
     }
 
@@ -92,18 +75,7 @@ static void zone_block_free(zone_t * zone, pfn_t blk, u32 order) {
         }
 
         // remove buddy from block list
-        pfn_t prev = page_array[bud].prev;
-        pfn_t next = page_array[bud].next;
-        if (NO_PAGE == prev) {
-            zone->list[order].head = next;
-        } else {
-            page_array[prev].next = next;
-        }
-        if (NO_PAGE == next) {
-            zone->list[order].tail = prev;
-        } else {
-            page_array[next].prev = prev;
-        }
+        pglist_remove(&zone->list[order], bud);
 
         // merge with its buddy
         page_array[bud].block = 0;
@@ -116,19 +88,11 @@ static void zone_block_free(zone_t * zone, pfn_t blk, u32 order) {
     page_array[blk].order = order;
 
     // put this block into the block list
-    pfn_t head = zone->list[order].head;
-    page_array[blk].prev   = NO_PAGE;
-    page_array[blk].next   = head;
-    zone->list[order].head = blk;
-    if (NO_PAGE == head) {
-        zone->list[order].tail = blk;
-    } else {
-        page_array[head].prev = blk;
-    }
+    pglist_push_head(&zone->list[order], blk);
 }
 
 //------------------------------------------------------------------------------
-// public interface
+// page frame allocator public routines
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wtype-limits"
@@ -148,8 +112,8 @@ static inline zone_t * zone_for(usize start, usize end) {
 
 // allocate page block of size 2^order
 // lock zone and interrupt, so ISR could alloc pages
-pfn_t page_block_alloc(u32 zones, u32 order) {
-    if (order >= ORDER_COUNT) {
+pfn_t page_block_alloc(u32 zones, int order) {
+    if ((order < 0) || (order >= ORDER_COUNT)) {
         return NO_PAGE; // invalid parameter
     }
 
@@ -187,11 +151,16 @@ pfn_t page_block_alloc(u32 zones, u32 order) {
     return NO_PAGE;
 }
 
-void page_block_free(pfn_t blk, u32 order) {
-    usize size = 1U << order;
+void page_block_free(pfn_t blk, int order) {
+    usize size = 1UL << order;
     zone_t * zone = zone_for((usize)  blk         << PAGE_SHIFT,
                              (usize) (blk + size) << PAGE_SHIFT);
+    dbg_assert(order >= 0);
     dbg_assert(order < ORDER_COUNT);
+    if (0 != (blk & (size - 1))) {
+        dbg_print("failed at page_free.\r\n");
+        dbg_print("%x, %d.\r\n", blk, order);
+    }
     dbg_assert(0 == (blk & (size - 1)));
     dbg_assert(NULL != zone);
 
@@ -200,7 +169,7 @@ void page_block_free(pfn_t blk, u32 order) {
     raw_spin_give(&zone->lock);
 }
 
-pfn_t page_range_alloc(u32 zones, u32 count) {
+pfn_t page_range_alloc(u32 zones, int count) {
     // allocate a block that is large enough, then return the exceeding part
     int order = 32 - CLZ32(count - 1);
     pfn_t rng = page_block_alloc(zones, order);
@@ -208,13 +177,13 @@ pfn_t page_range_alloc(u32 zones, u32 count) {
     return rng;
 }
 
-void page_range_free(pfn_t rng, u32 count) {
+void page_range_free(pfn_t rng, int count) {
     pfn_t from = rng;
     pfn_t to   = rng + count;
 
     while (from < to) {
         // compute best order for `from`
-        u32 order = CTZ32(from);
+        int order = CTZ32(from);
         if ((order >= ORDER_COUNT) || (from == 0)) {
             order = ORDER_COUNT - 1;
         }
@@ -284,7 +253,6 @@ void dump_page_layout(u32 zones) {
 // page list operations
 
 void pglist_push_head(pglist_t * list, pfn_t page) {
-    u32 key = irq_spin_take(&list->lock);
     page_array[page].prev = NO_PAGE;
     page_array[page].next = list->head;
     if (NO_PAGE != list->head) {
@@ -293,11 +261,9 @@ void pglist_push_head(pglist_t * list, pfn_t page) {
         list->tail = page;
     }
     list->head = page;
-    irq_spin_give(&list->lock, key);
 }
 
 void pglist_push_tail(pglist_t * list, pfn_t page) {
-    u32 key = irq_spin_take(&list->lock);
     page_array[page].prev = list->tail;
     page_array[page].next = NO_PAGE;
     if (NO_PAGE != list->tail) {
@@ -306,11 +272,9 @@ void pglist_push_tail(pglist_t * list, pfn_t page) {
         list->head = page;
     }
     list->tail = page;
-    irq_spin_give(&list->lock, key);
 }
 
-pfn_t pglist_pop_head (pglist_t * list) {
-    u32 key = irq_spin_take(&list->lock);
+pfn_t pglist_pop_head(pglist_t * list) {
     pfn_t head = list->head;
     if (NO_PAGE != head) {
         list->head = page_array[head].next;
@@ -318,12 +282,10 @@ pfn_t pglist_pop_head (pglist_t * list) {
     if (NO_PAGE == list->head) {
         list->tail = NO_PAGE;
     }
-    irq_spin_give(&list->lock, key);
     return head;
 }
 
-pfn_t pglist_pop_tail (pglist_t * list) {
-    u32 key = irq_spin_take(&list->lock);
+pfn_t pglist_pop_tail(pglist_t * list) {
     pfn_t tail = list->tail;
     if (NO_PAGE != tail) {
         list->tail = page_array[tail].prev;
@@ -331,46 +293,34 @@ pfn_t pglist_pop_tail (pglist_t * list) {
     if (NO_PAGE == list->tail) {
         list->head = NO_PAGE;
     }
-    irq_spin_give(&list->lock, key);
     return tail;
 }
 
-void pglist_join_head(pglist_t * list, pglist_t * from) {
-    u32 key = irq_spin_take(&list->lock);
-    raw_spin_take(&from->lock);
-
-    if ((NO_PAGE != from->head) && (NO_PAGE != from->tail)) {
-        page_array[from->tail].next = list->head;
+void pglist_remove(pglist_t * list, pfn_t page) {
+    pfn_t prev = page_array[page].prev;
+    pfn_t next = page_array[page].next;
+    if (NO_PAGE != prev) {
+        page_array[prev].next = next;
+    } else {
+        dbg_assert(list->head == page);
+        list->head = next;
     }
-    if ((NO_PAGE != list->head) && (NO_PAGE != list->tail)) {
-        page_array[list->head].prev = from->tail;
+    if (NO_PAGE != next) {
+        page_array[next].prev = prev;
+    } else {
+        dbg_assert(list->tail == page);
+        list->tail = prev;
     }
-
-    list->head = from->head;
-    from->head = NO_PAGE;
-    from->tail = NO_PAGE;
-
-    raw_spin_give(&from->lock);
-    irq_spin_give(&list->lock, key);
 }
 
-void pglist_join_tail(pglist_t * list, pglist_t * from) {
-    u32 key = irq_spin_take(&list->lock);
-    raw_spin_take(&from->lock);
-
-    if ((NO_PAGE != from->head) && (NO_PAGE != from->tail)) {
-        page_array[from->head].prev = list->tail;
+void pglist_free_all(pglist_t * list) {
+    while (NO_PAGE != list->head) {
+        dbg_assert(1 == page_array[list->head].block);
+        pfn_t next = page_array[list->head].next;
+        page_block_free(list->head, page_array[list->head].block);
+        list->head = next;
     }
-    if ((NO_PAGE != list->head) && (NO_PAGE != list->tail)) {
-        page_array[list->tail].next = from->head;
-    }
-
-    list->tail = from->tail;
-    from->head = NO_PAGE;
-    from->tail = NO_PAGE;
-
-    raw_spin_give(&from->lock);
-    irq_spin_give(&list->lock, key);
+    list->tail = NO_PAGE;
 }
 
 //------------------------------------------------------------------------------

@@ -149,13 +149,19 @@ usize mmu_translate(usize ctx, usize va) {
     u64 pml4e = (va >> 39) & 0x01ff;
 
     u64 * pml4 = (u64 *) phys_to_virt(ctx);
-    if (0 == (pml4[pml4e] & MMU_P)) { return NO_ADDR; }
+    if (0 == (pml4[pml4e] & MMU_P)) {
+        return NO_ADDR;
+    }
 
     u64 * pdp = (u64 *) phys_to_virt(pml4[pml4e] & MMU_ADDR);
-    if (0 == (pdp[pdpe] & MMU_P)) { return NO_ADDR; }
+    if (0 == (pdp[pdpe] & MMU_P)) {
+        return NO_ADDR;
+    }
 
     u64 * pd = (u64 *) phys_to_virt(pdp[pdpe] & MMU_ADDR);
-    if (0 == (pd[pde] & MMU_P)) { return NO_ADDR; }
+    if (0 == (pd[pde] & MMU_P)) {
+        return NO_ADDR;
+    }
 
     if (0 != (pd[pde] & MMU_PS)) {
         u64 base = pd[pde] & MMU_ADDR;
@@ -164,7 +170,9 @@ usize mmu_translate(usize ctx, usize va) {
     }
 
     u64 * pt = (u64 *) phys_to_virt(pd[pde] & MMU_ADDR);
-    if (0 == (pt[pte] & MMU_P)) { return NO_ADDR; }
+    if (0 == (pt[pte] & MMU_P)) {
+        return NO_ADDR;
+    }
     return (pt[pte] & MMU_ADDR) + (va & (0x1000 - 1));
 }
 
@@ -209,13 +217,19 @@ void mmu_unmap(usize ctx, usize va, usize n) {
         u64 pdpe  = (va >> 30) & 0x01ff;
         u64 pml4e = (va >> 39) & 0x01ff;
 
-        if (0 == (pml4[pml4e] & MMU_P)) { continue; }
+        if (0 == (pml4[pml4e] & MMU_P)) {
+            continue;
+        }
 
         u64 * pdp = (u64 *) phys_to_virt(pml4[pml4e] & MMU_ADDR);
-        if (0 == (pdp[pdpe] & MMU_P)) { continue; }
+        if (0 == (pdp[pdpe] & MMU_P)) {
+            continue;
+        }
 
         u64 * pd = (u64 *) phys_to_virt(pdp[pdpe] & MMU_ADDR);
-        if (0 == (pd[pde] & MMU_P)) { continue; }
+        if (0 == (pd[pde] & MMU_P)) {
+            continue;
+        }
 
         if (0 != (pd[pde] & MMU_PS)) {
             // 2M page size, first retrieve current mapping
@@ -250,30 +264,27 @@ __INIT void kernel_ctx_init() {
     virt = KERNEL_VMA;
     phys = KERNEL_LMA;
     mark = ROUND_UP(&_init_end, PAGE_SIZE);
-    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, 0);    // MMU_KERNEL
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_KERNEL);
 
     // kernel code section
     virt = mark;
     phys = virt - KERNEL_VMA + KERNEL_LMA;
     mark = ROUND_UP(&_text_end, PAGE_SIZE);
-    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY); // MMU_KERNEL
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_KERNEL);
 
     // kernel read only data section
     virt = mark;
     phys = virt - KERNEL_VMA + KERNEL_LMA;
     mark = ROUND_UP(&_rodata_end, PAGE_SIZE);
-    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC);  // MMU_KERNEL
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_RDONLY|MMU_NOEXEC|MMU_KERNEL);
 
     // kernel data section
     virt = mark;
     phys = virt - KERNEL_VMA + KERNEL_LMA;
     mark = ROUND_UP(&page_array[page_count], PAGE_SIZE);
-    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC); // MMU_KERNEL
+    mmu_map(kernel_ctx, virt, phys, (mark - virt) >> PAGE_SHIFT, MMU_NOEXEC|MMU_KERNEL);
 
     // map all physical memory to higher half
     // TODO: only map present pages, and add IO/Local APIC in driver
-    mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC);    // MMU_KERNEL
-
-    // map all physical memory to lower half (identity mapping)
-    mmu_map(kernel_ctx, 0, 0, 1U << 20, 0);
+    mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC|MMU_KERNEL);
 }

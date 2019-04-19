@@ -178,11 +178,13 @@ static void task_cleanup(task_t * tid) {
     dl_remove(&tid->process->tasks, &tid->dl_proc);
     if ((NULL == tid->process->tasks.head) &&
         (NULL == tid->process->tasks.tail)) {
+        // we can only create new thread from the same process
+        // if this is the last thread, meaning the process is finished
         process_delete(tid->process);
     }
 
-    // TODO: also signal parent for finish
-
+    // TODO: signal parent for finish
+    //       and wait for parent task to release the tcb
     pool_obj_free(&tcb_pool, tid);
 }
 

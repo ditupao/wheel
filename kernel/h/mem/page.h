@@ -70,6 +70,7 @@ extern void  pglist_free_all (pglist_t * list);
 // extern void  pglist_split_head(pglist_t * list, pglist_t * to);
 // extern void  pglist_split_tail(pglist_t * list, pglist_t * to);
 
+// requires: nothing
 extern __INIT void page_lib_init ();
 extern __INIT void page_range_add(usize start, usize end);
 

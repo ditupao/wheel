@@ -50,7 +50,7 @@ typedef struct tss {
 } __PACKED tss_t;
 
 static u64       gdt[MAX_CPU_COUNT*2+6];
-static idt_ent_t idt[MAX_INT_COUNT];
+static idt_ent_t idt[VEC_NUM_COUNT];
 __PERCPU tss_t   tss;
 
 __INITDATA int cpu_installed = 0;  // number of cpu installed
@@ -58,11 +58,11 @@ __INITDATA int cpu_installed = 0;  // number of cpu installed
            u64 percpu_base   = 0;  // cpu0's offset to its percpu area
            u64 percpu_size   = 0;  // length of one per-cpu area
 __PERCPU   int int_depth;
-__PERCPU   u64 int_stack_ptr;
-__PERCPU   u8  int_stack[16*PAGE_SIZE];
+__PERCPU   u64 int_rsp;
+__PERCPU   u8  int_stk[16*PAGE_SIZE];
 
 // interrupt service routines
-isr_proc_t isr_tbl[MAX_INT_COUNT];
+isr_proc_t isr_tbl[VEC_NUM_COUNT];
 
 // defined in cpu.S
 extern void int0_entry   ();
@@ -161,19 +161,14 @@ __INIT void idt_init() {
     if (0 == cpu_activated) {
         u64 entry = (u64) int0_entry;
         u64 step  = (u64) int1_entry - (u64) int0_entry;
-        for (int vec = 0; vec < MAX_INT_COUNT; ++vec) {
-            // if ((vec == 0x80) || (vec == 0x81)) {
-            //     fill_idt_ent(&idt[vec], (u64) entry_int80, 3);
-            // } else {
-            //     fill_idt_ent(&idt[vec], entry, 0);
-            // }
+        for (int vec = 0; vec < VEC_NUM_COUNT; ++vec) {
             fill_idt_ent(&idt[vec], entry, 0);
             entry += step;
         }
     }
     idt_ptr_t idtr;
     idtr.base  = (u64) &idt;
-    idtr.limit = MAX_INT_COUNT * sizeof(idt_ent_t) - 1;
+    idtr.limit = VEC_NUM_COUNT * sizeof(idt_ent_t) - 1;
     load_idtr(&idtr);
 }
 
@@ -198,32 +193,10 @@ __INIT void tss_init() {
     load_tr(((2 * idx + 6) << 3) | 3);
 }
 
-u32 int_lock() {
-    u64 key;
-    ASM("pushfq; cli; popq %0" : "=r"(key));
-    return (u32) key & 0x200;
-}
-
-void int_unlock(u32 key) {
-    if (key & 0x200) {
-        ASM("sti");
-    }
-}
-
-// setup interrupt handling, clear handler table and interrupt stack
-__INIT void int_init() {
-    memset(isr_tbl, 0, MAX_INT_COUNT * sizeof(isr_proc_t));
-    for (int i = 0; i < cpu_installed; ++i) {
-        u64 top = (u64) percpu_ptr(i, int_stack[16*PAGE_SIZE]);
-        percpu_var(i, int_stack_ptr) = top;
-        percpu_var(i, int_depth)     = 0;
-    }
-}
-
 //------------------------------------------------------------------------------
-// exception/interrupt/syscall dispatcher
+// exception/interrupt handler
 
-void exp_dispatch(int vec, int_frame_t * f) {
+static void exp_default(int vec, int_frame_t * f) {
     static const char * sym[] = {
         "DE", "DB", "NMI","BP", "OF", "BR", "UD", "NM",
         "DF", "??", "TS", "NP", "SS", "GP", "PF", "??",
@@ -240,12 +213,40 @@ void exp_dispatch(int vec, int_frame_t * f) {
     while (1) {}
 }
 
-void int_dispatch(int vec, int_frame_t * f) {
-    if (NULL != isr_tbl[vec]) {
-        isr_tbl[vec](vec, f);
-    } else {
-        dbg_print("INT#%x!\n", vec);
-        while (1) {}
+static void int_default(int vec, int_frame_t * f __UNUSED) {
+    // if (NULL != isr_tbl[vec]) {
+    //     isr_tbl[vec](vec, f);
+    // } else {
+    //     dbg_print("INT#%x!\n", vec);
+    //     while (1) {}
+    // }
+    dbg_print("INT#%x!\n", vec);
+    while (1) {}
+}
+
+// setup interrupt stack, init isr table
+__INIT void int_init() {
+    for (int i = 0; i < cpu_installed; ++i) {
+        percpu_var(i, int_depth) = 0;
+        percpu_var(i, int_rsp)   = (u64) percpu_ptr(i, int_stk[16*PAGE_SIZE]);
+    }
+    for (int i = 0; i < 32; ++i) {
+        isr_tbl[i] = exp_default;
+    }
+    for (int i = 32; i < VEC_NUM_COUNT; ++i) {
+        isr_tbl[i] = int_default;
+    }
+}
+
+u32 int_lock() {
+    u64 key;
+    ASM("pushfq; cli; popq %0" : "=r"(key));
+    return (u32) key & 0x200;
+}
+
+void int_unlock(u32 key) {
+    if (key & 0x200) {
+        ASM("sti");
     }
 }
 
@@ -267,9 +268,6 @@ void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
     regs->rsp     = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
     regs->rsp0    = (u64) sp;
     regs->cr3     = (u64) ctx;
-    regs->rip3    = 0;
-    regs->rsp3    = 0;
-    regs->rflags3 = 0;
 
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment

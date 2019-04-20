@@ -35,6 +35,7 @@ extern int         vmspace_is_free (vmspace_t * space, usize addr, usize size);
 extern int         vmspace_map     (vmspace_t * space, vmrange_t * range);
 extern void        vmspace_unmap   (vmspace_t * space, vmrange_t * range);
 
+// requires: nothing
 extern __INIT void vmspace_lib_init();
 
 #endif // MEM_VMSPACE_H

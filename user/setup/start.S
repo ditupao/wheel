@@ -16,5 +16,19 @@ _start:
     ret
 
 syscall:
+    pushq   %rbx
+    pushq   %r10
+    pushq   %r11
+
+    movq    %rdi, %rax          // rax = syscall number
+    movq    %rsi, %rdi
+    movq    %rdx, %rsi
+    movq    %rcx, %rdx
+
     syscall
+
+    popq    %r11
+    popq    %r10
+    popq    %rbx
+
     ret

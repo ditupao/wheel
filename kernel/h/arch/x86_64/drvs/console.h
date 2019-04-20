@@ -6,6 +6,7 @@
 extern void console_putc(const char c);
 extern void console_puts(const char * s);
 
+// requires: nothing
 extern __INIT void console_dev_init();
 
 #endif // ARCH_X86_64_DRVS_CONSOLE_H

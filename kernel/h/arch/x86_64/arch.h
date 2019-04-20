@@ -5,7 +5,7 @@
 
 // cpu and int vector count limit
 #define MAX_CPU_COUNT   64
-#define MAX_INT_COUNT   256
+#define VEC_NUM_COUNT   256
 
 // MMU configuration
 #define PAGE_SIZE       0x1000                  // we use 4K pages

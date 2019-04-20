@@ -19,12 +19,9 @@ typedef struct regs {
     int_frame_t * rsp;      // current int stack frame
     u64           rsp0;     // value saved in tss->rsp0
     u64           cr3;      // current page table
-    u64           rip3;     // saved rip value on syscall
-    u64           rsp3;     // saved rsp value on syscall
-    u64           rflags3;  // saved rflags value on syscall
 } __PACKED __ALIGNED(16) regs_t;
 
-typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);
+typedef void (* isr_proc_t) (int vec, int_frame_t * sp);
 
 // global data
 extern __INITDATA int cpu_installed;
@@ -32,7 +29,7 @@ extern            int cpu_activated;
 extern            u64 percpu_base;
 extern            u64 percpu_size;
 extern __PERCPU   int int_depth;
-extern __PERCPU   u64 int_stack_ptr;
+extern __PERCPU   u64 int_rsp;
 extern isr_proc_t     isr_tbl[];
 
 //------------------------------------------------------------------------------
@@ -164,15 +161,17 @@ static inline void * calc_thiscpu_addr(void * ptr) {
 //------------------------------------------------------------------------------
 // essential cpu features
 
-extern __INIT void cpu_init   ();
-extern __INIT void gdt_init   ();
-extern __INIT void idt_init   ();
-extern __INIT void tss_init   ();
+// requires: percpu-var
+extern __INIT void cpu_init();
+extern __INIT void gdt_init();
+extern __INIT void idt_init();
+extern __INIT void tss_init();
+extern __INIT void int_init();
+
 static inline void int_disable() { ASM("cli"); }
 static inline void int_enable () { ASM("sti"); }
 extern        u32  int_lock   ();
 extern        void int_unlock (u32 key);
-extern __INIT void int_init   ();
 
 //------------------------------------------------------------------------------
 // task support

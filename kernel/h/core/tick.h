@@ -24,6 +24,7 @@ extern void wdog_cancel (wdog_t * wd);
 extern void tick_advance();
 extern void tick_delay  (int ticks);
 
+// requires: nothing
 extern __INIT void tick_lib_init();
 
 #endif // CORE_TICK_H

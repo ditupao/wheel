@@ -173,6 +173,7 @@ extern mcfg_t * acpi_mcfg;
 extern fadt_t * acpi_fadt;
 extern hpet_t * acpi_hpet;
 
+// requires: nothing
 extern __INIT void acpi_tbl_init();
 
 #endif // ARCH_X86_64_LIBA_ACPI_H

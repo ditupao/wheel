@@ -10,6 +10,7 @@
 #include <core/task.h>
 #include <core/semaphore.h>
 #include <core/process.h>
+#include <core/syscall.h>
 #include <core/elf64.h>
 
 #include <mem/page.h>

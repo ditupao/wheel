@@ -58,6 +58,7 @@ extern void     task_resume (task_t * tid);
 extern void     task_delay  (int ticks);
 extern void     task_wakeup (task_t * tid);
 
+// requires: percpu-var
 extern __INIT void task_lib_init();
 
 #endif // CORE_TASK_H

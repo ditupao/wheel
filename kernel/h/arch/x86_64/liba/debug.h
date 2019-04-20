@@ -3,8 +3,6 @@
 
 #include <base.h>
 
-extern __INIT void dbg_regist(u8 * sym_tbl, usize sym_len, u8 * str_tbl, usize str_len);
-
 extern void dbg_print(const char * msg, ...);
 extern void dbg_trace();
 
@@ -13,5 +11,8 @@ extern void dbg_trace();
     dbg_trace();                                                \
     while (1) {}                                                \
 } })
+
+// requires: physical-page-alloc
+extern __INIT void dbg_regist(u8 * sym_tbl, usize sym_len, u8 * str_tbl, usize str_len);
 
 #endif // ARCH_X86_64_LIBA_DEBUG_H

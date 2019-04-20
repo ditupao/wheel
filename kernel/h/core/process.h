@@ -17,6 +17,8 @@ typedef struct process {
 
 extern process_t * process_create();
 extern void process_delete(process_t * pid);
+
+// requires: nothing
 extern __INIT void process_lib_init();
 
 #endif // CORE_PROCESS_H

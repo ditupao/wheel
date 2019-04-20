@@ -16,19 +16,6 @@ __PERCPU ready_q_t ready_q;
 static   pool_t    tcb_pool;
 
 //------------------------------------------------------------------------------
-// task entry point, all task start from here
-
-// typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
-
-// __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
-//     ((task_proc_t) proc) (a1, a2, a3, a4);
-//     task_exit();
-
-//     // make sure we don't return
-//     while (1) {}
-// }
-
-//------------------------------------------------------------------------------
 // low level scheduling, task state switching
 // caller need to lock interrupt, or risk being switched-out
 // caller also need to lock target tid, or might be deleted by others

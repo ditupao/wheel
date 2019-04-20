@@ -16,6 +16,7 @@ extern u8   loapic_get_id  ();
 extern void loapic_send_eoi();
 extern void loapic_emit_ipi(u32 cpu, u32 vec);
 
+// requires: nothing
 extern __INIT void loapic_override(u64 addr);
 extern __INIT void loapic_dev_add (madt_loapic_t * tbl);
 extern __INIT void loapic_set_nmi (madt_loapic_mni_t * tbl);

@@ -279,6 +279,8 @@ static void root_proc() {
         }
     }
 
+    dbg_trace();
+
 #if 1
     // parse and load elf file, embedded as RAMFS
     u8  * bin_addr = &_ramfs_addr;

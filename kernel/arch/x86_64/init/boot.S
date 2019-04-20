@@ -1,3 +1,5 @@
+#include <asm.h>
+
 #define MB_MAGIC    0x1badb002
 #define MB_FLAGS    1<<0 | 1<<1
 #define MB_CHECK    (- (MB_MAGIC + MB_FLAGS))
@@ -6,8 +8,8 @@
 #define KERNEL_VMA  0xffffffff81000000
 #define ABSOLUTE(x) ((x) - KERNEL_VMA + KERNEL_LMA)
 
-.global sys_boot
-.extern sys_init
+GLOBAL_FUNC(sys_boot)
+EXTERN_FUNC(sys_init)
 
 //------------------------------------------------------------------------------
 // first piece of code to run, 32-bit protected mode, paging disabled

@@ -65,10 +65,10 @@ __PERCPU   u8  int_stack[16*PAGE_SIZE];
 isr_proc_t isr_tbl[MAX_INT_COUNT];
 
 // defined in cpu.S
-extern void entry_0 ();
-extern void entry_1 ();
-extern void entry_int80();
-extern void entry_syscall();
+extern void int0_entry   ();
+extern void int1_entry   ();
+extern void syscall_entry();
+extern void task_entry   ();
 extern void load_gdtr(gdt_ptr_t * ptr);
 extern void load_idtr(idt_ptr_t * ptr);
 extern void load_tr  (u16 sel);
@@ -128,7 +128,7 @@ __INIT void cpu_init() {
 
     // setup msr for syscall/sysret
     write_msr(0xc0000081, 0x001b000800000000UL);    // STAR
-    write_msr(0xc0000082, (u64) entry_syscall);     // LSTAR
+    write_msr(0xc0000082, (u64) syscall_entry);     // LSTAR
     write_msr(0xc0000084, 0UL);                     // SFMASK
 }
 
@@ -159,14 +159,15 @@ static __INIT void fill_idt_ent(idt_ent_t * entry, u64 isr, int dpl) {
 
 __INIT void idt_init() {
     if (0 == cpu_activated) {
-        u64 entry = (u64) entry_0;
-        u64 step  = (u64) entry_1 - (u64) entry_0;
+        u64 entry = (u64) int0_entry;
+        u64 step  = (u64) int1_entry - (u64) int0_entry;
         for (int vec = 0; vec < MAX_INT_COUNT; ++vec) {
-            if ((vec == 0x80) || (vec == 0x81)) {
-                fill_idt_ent(&idt[vec], (u64) entry_int80, 3);
-            } else {
-                fill_idt_ent(&idt[vec], entry, 0);
-            }
+            // if ((vec == 0x80) || (vec == 0x81)) {
+            //     fill_idt_ent(&idt[vec], (u64) entry_int80, 3);
+            // } else {
+            //     fill_idt_ent(&idt[vec], entry, 0);
+            // }
+            fill_idt_ent(&idt[vec], entry, 0);
             entry += step;
         }
     }
@@ -263,20 +264,24 @@ void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
     sp &= ~7UL;
 
     memset(regs, 0, sizeof(regs_t));
-    regs->rsp  = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
-    regs->rsp0 = (u64) sp;
-    regs->cr3  = (u64) ctx;
+    regs->rsp     = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
+    regs->rsp0    = (u64) sp;
+    regs->cr3     = (u64) ctx;
+    regs->rip3    = 0;
+    regs->rsp3    = 0;
+    regs->rflags3 = 0;
 
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment
     regs->rsp->rip    = (u64) task_entry; // entry address
     regs->rsp->rsp    = (u64) sp;         // stack top
     regs->rsp->rflags = 0x0200;           // interrupt enabled
-    regs->rsp->rdi    = (u64) proc;
-    regs->rsp->rsi    = (u64) a1;
-    regs->rsp->rdx    = (u64) a2;
-    regs->rsp->rcx    = (u64) a3;
-    regs->rsp->r8     = (u64) a4;
+    regs->rsp->rax    = (u64) proc;
+    regs->rsp->rdi    = (u64) a1;
+    regs->rsp->rsi    = (u64) a2;
+    regs->rsp->rdx    = (u64) a3;
+    regs->rsp->rcx    = (u64) a4;
+    // regs->rsp->r8     = (u64) a4;
 }
 
 void regs_ctx_set(regs_t * regs, usize ctx) {

@@ -18,15 +18,15 @@ static   pool_t    tcb_pool;
 //------------------------------------------------------------------------------
 // task entry point, all task start from here
 
-typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
+// typedef int (* task_proc_t) (void * a1, void * a2, void * a3, void * a4);
 
-__NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
-    ((task_proc_t) proc) (a1, a2, a3, a4);
-    task_exit();
+// __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4) {
+//     ((task_proc_t) proc) (a1, a2, a3, a4);
+//     task_exit();
 
-    // make sure we don't return
-    while (1) {}
-}
+//     // make sure we don't return
+//     while (1) {}
+// }
 
 //------------------------------------------------------------------------------
 // low level scheduling, task state switching

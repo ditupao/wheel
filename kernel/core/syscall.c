@@ -39,6 +39,9 @@ void sys_spawn(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
     task_t * tid = task_create(cur->process, cur->priority, 0, thread_entry, entry, 0,0,0);
     task_resume(tid);
+
+    dbg_print("tracing inside sys_spawn:\r\n");
+    dbg_trace();
 }
 
 
@@ -74,4 +77,5 @@ usize syscall_dispatch(usize id, void * a1, void * a2, void * a3, void * a4) {
 
 void syscall_dispatch2() {
     dbg_print("doing syscall.\r\n");
+    dbg_trace();
 }

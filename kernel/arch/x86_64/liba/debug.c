@@ -64,10 +64,12 @@ void dbg_trace() {
     u64 * rbp;
     ASM("movq %%rbp, %0" : "=r"(rbp));
 
-    for (int i = 0; rbp[0] && (i < 16); ++i) {
-        if (dbg_lookup(rbp[1])) {
-            break;
-        }
+    // until we got a NULL return address
+    for (int i = 0; rbp[1]; ++i) {
+        // if (dbg_lookup(rbp[1])) {
+        //     break;
+        // }
+        dbg_lookup(rbp[1]);
         rbp = (u64 *) rbp[0];
     }
 }

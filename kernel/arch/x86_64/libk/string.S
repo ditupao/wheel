@@ -1,8 +1,8 @@
-// optimized version of string functions
+#include <asm.h>
 
-.global memcpy
-.global memmove
-.global memset
+GLOBAL_FUNC(memcpy)
+GLOBAL_FUNC(memmove)
+GLOBAL_FUNC(memset)
 
 .section .text
 .code64

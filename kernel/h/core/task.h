@@ -8,6 +8,8 @@
 #include <libk/list.h>
 
 // task control block
+// - kstack: used to execute syscall handler and exception handler
+// - ustack: used to execute application code under user mode
 typedef struct task {
     regs_t      regs;           // arch-specific status
     spin_t      lock;           // spinlock used in state-switching

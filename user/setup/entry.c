@@ -12,7 +12,6 @@
 #define SYS_MAGIC   255
 
 extern unsigned int syscall(int func, void * a1);
-extern unsigned int syscall2();
 
 void another_thread_func() {
     syscall(SYS_WRITE, "printing within another thread!\r\n");
@@ -34,7 +33,7 @@ void _entry() {
         syscall(SYS_WRITE, "we got something else!\r\n");
     }
 
-    syscall2();
+    // syscall();
 
     syscall(SYS_SPAWN, another_thread_func);
 

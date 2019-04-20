@@ -1,42 +1,44 @@
-.global atomic32_set
-.global atomic32_inc
-.global atomic32_dec
-.global atomic32_add
-.global atomic32_sub
-.global atomic32_and
-.global atomic32_or
-.global atomic32_xor
-.global atomic32_cas
+#include <asm.h>
 
-.global atomic64_set
-.global atomic64_inc
-.global atomic64_dec
-.global atomic64_add
-.global atomic64_sub
-.global atomic64_and
-.global atomic64_or
-.global atomic64_xor
-.global atomic64_cas
+GLOBAL_FUNC(atomic32_set)
+GLOBAL_FUNC(atomic32_inc)
+GLOBAL_FUNC(atomic32_dec)
+GLOBAL_FUNC(atomic32_add)
+GLOBAL_FUNC(atomic32_sub)
+GLOBAL_FUNC(atomic32_and)
+GLOBAL_FUNC(atomic32_or )
+GLOBAL_FUNC(atomic32_xor)
+GLOBAL_FUNC(atomic32_cas)
 
-.global thiscpu32_set
-.global thiscpu32_inc
-.global thiscpu32_dec
-.global thiscpu32_add
-.global thiscpu32_sub
-.global thiscpu32_and
-.global thiscpu32_or
-.global thiscpu32_xor
-.global thiscpu32_cas
+GLOBAL_FUNC(atomic64_set)
+GLOBAL_FUNC(atomic64_inc)
+GLOBAL_FUNC(atomic64_dec)
+GLOBAL_FUNC(atomic64_add)
+GLOBAL_FUNC(atomic64_sub)
+GLOBAL_FUNC(atomic64_and)
+GLOBAL_FUNC(atomic64_or )
+GLOBAL_FUNC(atomic64_xor)
+GLOBAL_FUNC(atomic64_cas)
 
-.global thiscpu64_set
-.global thiscpu64_inc
-.global thiscpu64_dec
-.global thiscpu64_add
-.global thiscpu64_sub
-.global thiscpu64_and
-.global thiscpu64_or
-.global thiscpu64_xor
-.global thiscpu64_cas
+GLOBAL_FUNC(thiscpu32_set)
+GLOBAL_FUNC(thiscpu32_inc)
+GLOBAL_FUNC(thiscpu32_dec)
+GLOBAL_FUNC(thiscpu32_add)
+GLOBAL_FUNC(thiscpu32_sub)
+GLOBAL_FUNC(thiscpu32_and)
+GLOBAL_FUNC(thiscpu32_or )
+GLOBAL_FUNC(thiscpu32_xor)
+GLOBAL_FUNC(thiscpu32_cas)
+
+GLOBAL_FUNC(thiscpu64_set)
+GLOBAL_FUNC(thiscpu64_inc)
+GLOBAL_FUNC(thiscpu64_dec)
+GLOBAL_FUNC(thiscpu64_add)
+GLOBAL_FUNC(thiscpu64_sub)
+GLOBAL_FUNC(thiscpu64_and)
+GLOBAL_FUNC(thiscpu64_or )
+GLOBAL_FUNC(thiscpu64_xor)
+GLOBAL_FUNC(thiscpu64_cas)
 
 .section .text
 .code64

@@ -1,27 +1,32 @@
+#include <asm.h>
+
 .section .text
 .code64
 
-.global entry_0
-.global entry_1
-.global entry_int80
-.global entry_syscall
-.global task_switch
-.global enter_user
-.global load_gdtr
-.global load_idtr
-.global load_tr
+GLOBAL_FUNC(int0_entry)
+GLOBAL_FUNC(int1_entry)
 
-.extern int_depth
-.extern int_stack_ptr
-.extern tid_prev
-.extern tid_next
+GLOBAL_FUNC(syscall_entry)
+GLOBAL_FUNC(task_entry)
+GLOBAL_FUNC(task_switch)
 
-.extern exp_dispatch            // in `liba/cpu.c`
-.extern int_dispatch            // in `liba/cpu.c`
-.extern syscall_dispatch        // in `core/syscall.c`
-.extern syscall_dispatch2       // in `core/syscall.c`
+GLOBAL_FUNC(enter_user)
+GLOBAL_FUNC(load_gdtr)
+GLOBAL_FUNC(load_idtr)
+GLOBAL_FUNC(load_tr)
 
-.extern work_dequeue
+EXTERN_DATA(int_depth)
+EXTERN_DATA(int_stack_ptr)
+EXTERN_DATA(tid_prev)
+EXTERN_DATA(tid_next)
+
+EXTERN_FUNC(exp_dispatch)           // in `liba/cpu.c`
+EXTERN_FUNC(int_dispatch)           // in `liba/cpu.c`
+EXTERN_FUNC(syscall_dispatch)       // in `core/syscall.c`
+EXTERN_FUNC(syscall_dispatch2)      // in `core/syscall.c`
+
+EXTERN_FUNC(work_dequeue)
+EXTERN_FUNC(task_exit)
 
 //------------------------------------------------------------------------------
 // exception and interrupt entry points
@@ -64,14 +69,14 @@
 .endm
 
 .balign 16
-entry_0:
+int0_entry:
     pushq   $-1
     pushq   %rax
     movl    $0, %eax
     jmp     exception_stub
 
 .balign 16
-entry_1:
+int1_entry:
     pushq   $-1
     pushq   %rax
     movl    $1, %eax
@@ -143,7 +148,7 @@ interrupt_stub:
     jne     _no_stack_switch
 
     movq    %gs:(tid_prev), %rax
-    movq    %rsp, (%rax)                // save to `tid_prev->regs->rsp`
+    movq    %rsp, (%rax)                // save to tid_prev->regs->rsp
     movq    %gs:(int_stack_ptr), %rsp   // switch to interrupt stack
 
 _no_stack_switch:
@@ -157,9 +162,9 @@ _no_stack_switch:
     jne     _no_stack_restore           // if we're still inside ISR
 
     movq    %gs:(tid_next), %rax
-    movq    0x00(%rax), %rsp            // switch to `tid_next->regs->rsp`
-    movq    0x08(%rax), %rbx            // get tcb->rsp0
-    movq    0x10(%rax), %rcx            // get tcb->pgtbl
+    movq    0x00(%rax), %rsp            // get tid_next->regs->rsp
+    movq    0x08(%rax), %rbx            // get tid_next->regs->rsp0
+    movq    0x10(%rax), %rcx            // get tid_next->regs->cr3
     movq    %rax, %gs:(tid_prev)        // update `tid_prev`
     movq    $tss, %rdx
     movq    %rbx, %gs:4(%rdx)           // store rsp0 in tss (maybe unaligned?)
@@ -182,37 +187,71 @@ _no_stack_restore:
 //------------------------------------------------------------------------------
 // system call entry
 
-// the entry for system call (int 0x80) is different from other vectors
-// syscall works like normal C function, no need to save regs
-entry_int80:
-    swapgs                              // always come from ring3
-    sti
-    call    syscall_dispatch
-    cli
-    swapgs                              // always return to ring3
-    iretq
-
 // entry point for syscall/sysret version
-entry_syscall:
+// rax - syscall number
+// rdi - argument 1
+// rsi - argument 2
+// rdx - argument 3
+// r10 - argument 4 (replace rcx)
+// r8  - argument 5
+// r9  - argument 6
+// caller of syscall must also save: rbx, rcx, r11
+// the content of register r12-r15 are reserved
+// after `syscall`, old rip was saved in rcx, rflags saved in r11
+// stack (rsp) remains unchanged (still user stack)
+syscall_entry:
     swapgs
-    // old rflags saved in r11, old rip saved in rcx
-    // stack remains unchanged (still user stack)
-    movq    %rcx, %r12
-    movq    %rsp, %r13
-    movq    %gs:(tid_prev), %rcx        // current task
-    movq    0x08(%rcx), %rsp            // switch to kernel stack
+    movq    %gs:(tid_prev), %rbx        // current task
+    movq    0x08(%rbx), %rbx            // get tid->regs->rsp0
+    xchgq   %rbx, %rsp                  // rsp = new stack, rbx = old stack
 
-    call    syscall_dispatch2
+    pushq   $0                          // dummy return address
+    pushq   %rbp                        // save old rbp (from user mode)
+    movq    %rsp, %rbp                  // point to current stack frame
 
-    // resume rcx and rsp
-    movq    %r12, %rcx
-    movq    %r13, %rsp
+    pushq   %rcx                        // -0x08(rbp) save old rip (from user mode)
+    pushq   %rbx                        // -0x10(rbp) save old rsp (from user mode)
+    pushq   %r11                        // -0x18(rbp) save old rflags (from user mode)
+
+    // TODO: use rax as index to syscall_tbl
+    movq    %r10, %rcx                  // sys V abi
+    call    syscall_dispatch
+
+    movq    -0x18(%rbp), %r11           // restore user rflags
+    movq    -0x10(%rbp), %rsp           // restore user rsp
+    movq    -0x08(%rbp), %rcx           // restore user rip
+    movq         (%rbp), %rbp           // restore user rbp
+
+#if 0
+    // TODO: rbx, r11 cannot be changed by `syscall_dispatch`
+    movq    %gs:(tid_prev), %rbx        // current task
+    movq    0x18(%rbx), %rcx            // get tid->regs->rip3
+    movq    0x20(%rbx), %rsp            // get tid->regs->rsp3
+    movq    0x28(%rbx), %r11            // get tid->regs->rflags3
+#endif
 
     swapgs
     sysretq
 
 //------------------------------------------------------------------------------
 // task support
+
+// the starting point of a new task
+// rax - function pointer
+// rdi - argument 1
+// rsi - argument 2
+// rdx - argument 3
+// rcx - argument 4
+task_entry:
+    pushq   $0                          // dummy return code
+    pushq   $0                          // old rbp value
+    movq    %rsp, %rbp                  // point to current stack
+
+    call    * %rax                      // start running task code
+    call    task_exit                   // remove this task
+1:
+    hlt
+    jmp     1b
 
 // called outside int context, switch to tid_next unconditionally
 // we have to make sure `tid_next` doesn't change during the switch
@@ -245,9 +284,9 @@ task_switch:
     save_regs                           // save rest of the registers on stack
     movq    %rsp, (%rsi)                // store the stack top into TCB
 
-    movq    0x00(%rdi), %rsp            // switch to new task stack
-    movq    0x08(%rdi), %rbx            // get tcb->rsp0
-    movq    0x10(%rdi), %rcx            // get tcb->pgtbl
+    movq    0x00(%rdi), %rsp            // get tid_next->regs->rsp
+    movq    0x08(%rdi), %rbx            // get tid_next->regs->rsp0
+    movq    0x10(%rdi), %rcx            // get tid_next->regs->cr3
     movq    %rdi, %gs:(tid_prev)        // update `tid_prev`, context already saved
     movq    $tss, %rax
     movq    %rbx, %gs:4(%rax)           // store rsp0 in tss

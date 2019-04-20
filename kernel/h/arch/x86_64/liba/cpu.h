@@ -4,6 +4,7 @@
 #include <base.h>
 #include <arch.h>
 
+// register frame saved on stack during interrupt and exception
 typedef struct int_frame {
     u64 r15;    u64 r14;    u64 r13;    u64 r12;
     u64 r11;    u64 r10;    u64 r9;     u64 r8;
@@ -12,10 +13,15 @@ typedef struct int_frame {
     u64 rip;    u64 cs;     u64 rflags; u64 rsp;    u64 ss;
 } __PACKED int_frame_t;
 
+// rsp and rsp0 are not redundant
+// since interrupts and exceptions could re-entry
 typedef struct regs {
     int_frame_t * rsp;      // current int stack frame
     u64           rsp0;     // value saved in tss->rsp0
     u64           cr3;      // current page table
+    u64           rip3;     // saved rip value on syscall
+    u64           rsp3;     // saved rsp value on syscall
+    u64           rflags3;  // saved rflags value on syscall
 } __PACKED __ALIGNED(16) regs_t;
 
 typedef void (* isr_proc_t) (u32 vec, int_frame_t * sp);

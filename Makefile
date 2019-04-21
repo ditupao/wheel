@@ -10,13 +10,13 @@ ISOFILE :=  $(OUTDIR)/wheel.iso
 
 build:
 	@ echo "building the wheel operating system"
-	@ $(MAKE) -C user   build OUTDIR=$(OUTDIR)/user   ARCH=$(TGTARCH)
-	@ $(MAKE) -C kernel build OUTDIR=$(OUTDIR)/kernel ARCH=$(TGTARCH) RAMFS=$(APPFILE)
+	@ $(MAKE) -C user   ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/user   APPDIR=$(OUTDIR)/apps ACTION=build
+	@ $(MAKE) -C kernel ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/kernel APPDIR=$(OUTDIR)/apps        build
 
 clean:
 	@ echo "cleaning the wheel operating system"
-	@ $(MAKE) -C user   clean OUTDIR=$(OUTDIR)/user   ARCH=$(TGTARCH)
-	@ $(MAKE) -C kernel clean OUTDIR=$(OUTDIR)/kernel ARCH=$(TGTARCH)
+	@ $(MAKE) -C user   ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/user   APPDIR=$(OUTDIR)/apps ACTION=clean
+	@ $(MAKE) -C kernel ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/kernel APPDIR=$(OUTDIR)/apps        clean
 	@ rm -rf $(ISOFILE)
 
 iso: build

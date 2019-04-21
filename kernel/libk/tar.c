@@ -17,64 +17,64 @@ typedef struct tar_hdr {
     char devminor[  8];
 } tar_hdr_t;
 
+static int is_eoa(u8 * ptr) {
+    for (int i = 0; i < 512; ++i) {
+        if (0 != *(ptr + i)) {
+            return NO;  // this is not end-of-archive
+        }
+    }
+    return YES;
+}
+
 // search for a file entry in the tar file
-void tar_find(u8 * tar, const char * name, u8 ** buff, usize * size) {
+int tar_find(u8 * tar, const char * name, u8 ** buff, usize * size) {
     *buff = NULL;
     *size = 0;
 
     usize offset = 0;
-    usize len    = 0;
     while (1) {
         tar_hdr_t * hdr = (tar_hdr_t *) (tar + offset);
-
         if (hdr->name[0] == '\0') {
-            for (int i = 0; i < 1024; ++i) {
-                if (0 != *(tar + offset + i)) {
-                    goto pass;  // this is not end-of-archive
-                }
+            if (is_eoa(tar + offset)) {
+                return ERROR;
             }
-            return; // we've found end-of-archive
         }
 
-pass:
-        len = 0;
+        usize filesize = 0;
         for (int i = 0; (i < 12) && (hdr->size[i] != '\0'); ++i) {
-            len *= 8;
-            len += hdr->size[i] - '0';
+            filesize *= 8;
+            filesize += hdr->size[i] - '0';
         }
 
         if (0 == strncmp(hdr->name, name, 100)) {
             // TODO: retrieve file size
             *buff = tar + offset + 512;
-            *size = len;
-            return;
+            *size = filesize;
+            return OK;
         }
-        offset += 512 + ROUND_UP(len, 512);
+
+        offset += 512 + ROUND_UP(filesize, 512);
     }
 }
 
+// print all entries in the tar file
 void tar_dump(u8 * tar) {
     usize offset = 0;
-    usize len    = 0;
     while (1) {
         tar_hdr_t * hdr = (tar_hdr_t *) (tar + offset);
-
         if (hdr->name[0] == '\0') {
-            for (int i = 0; i < 1024; ++i) {
-                if (0 != *(tar + offset + i)) {
-                    goto pass;  // this is not end-of-archive
-                }
+            if (is_eoa(tar + offset)) {
+                return;
             }
-            return; // we've found end-of-archive
-        }
-pass:
-        len = 0;
-        for (int i = 0; (i < 12) && (hdr->size[i] != '\0'); ++i) {
-            len *= 8;
-            len += hdr->size[i] - '0';
         }
 
-        dbg_print("entry: %s.\r\n", hdr->name);
-        offset += 512 + ROUND_UP(len, 512);
+        usize filesize = 0;
+        for (int i = 0; (i < 12) && (hdr->size[i] != '\0'); ++i) {
+            filesize *= 8;
+            filesize += hdr->size[i] - '0';
+        }
+
+        dbg_print("entry: %s, mode: %s, size: %d.\r\n", hdr->name, hdr->mode, filesize);
+        offset += 512 + ROUND_UP(filesize, 512);
     }
 }

@@ -1,14 +1,17 @@
 # makefile for wheel kernel
 
+TARFILE :=  $(OUTDIR)/ramfs.tar
+RAMFILE :=  $(OUTDIR)/ramfs.o
+
 ELFFILE :=  $(OUTDIR)/wheel.elf
 BINFILE :=  $(OUTDIR)/wheel.bin
 MAPFILE :=  $(OUTDIR)/wheel.map
 SYMFILE :=  $(OUTDIR)/wheel.sym
 
-DIRS    :=  arch/$(ARCH) core mem libk
-SRCS    :=  $(foreach d,$(DIRS),$(shell find $(d) -name '*.S' -o -name '*.c'))
-OBJS    :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCS))
-DEPS    :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJS)))
+SUBDIRS :=  arch/$(ARCH) core mem libk
+SRCLIST :=  $(foreach d,$(SUBDIRS),$(shell find $(d) -type f -name '*.S' -o -name '*.c'))
+OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
+DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
 
 CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -ffreestanding -Wall -Wextra
 CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration
@@ -20,22 +23,23 @@ include arch/$(ARCH)/config.mk
 build:  $(BINFILE) $(SYMFILE)
 
 clean:
-	@ rm -rf $(ELFFILE)
-	@ rm -rf $(BINFILE)
-	@ rm -rf $(MAPFILE)
-	@ rm -rf $(SYMFILE)
-	@ rm -rf $(OBJS)
-	@ rm -rf $(RAMOBJ)
-	@ rm -rf $(DEPS)
+	@ rm -f $(OBJLIST)
+	@ rm -f $(DEPLIST)
+	@ rm -f $(TARFILE)
+	@ rm -f $(RAMFILE)
+	@ rm -f $(ELFFILE)
+	@ rm -f $(BINFILE)
+	@ rm -f $(MAPFILE)
+	@ rm -f $(SYMFILE)
 
-ifdef RAMFS
-RAMOBJ := $(OUTDIR)/ramfs.o
-$(RAMOBJ): $(RAMFS)
+$(RAMFILE): $(TARFILE)
 	@ echo "[K:CP] $@"
 	@ $(OBJCOPY) --input binary --output elf64-x86-64 --binary-architecture=i386 --rename-section .data=.binary $< $@
-endif
 
-$(ELFFILE): $(OBJS) $(RAMOBJ)
+$(TARFILE):
+	@ tar -cf $@ -C $(APPDIR) .
+
+$(ELFFILE): $(OBJLIST) $(RAMFILE)
 	@ echo "[K:LD] $@"
 	@ $(CC) $(LFLAGS) -o $@ $^
 
@@ -47,18 +51,18 @@ $(SYMFILE): $(ELFFILE)
 	@ echo "[K:CP] $@"
 	@ $(OBJCOPY) --only-keep-debug $< $@
 
-$(filter %.S.o, $(OBJS)): $(OUTDIR)/%.S.o: %.S
+$(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
 	@ echo "[K:AS] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
-$(filter %.c.o, $(OBJS)): $(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
+$(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
 	@ echo "[K:CC] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) $(DEPGEN) -o $@ $<
 	@ mv -f $(basename $@).t $(basename $@).d
 
-$(DEPS): ;
-.PRECIOUS: $(DEPS)
+$(DEPLIST): ;
+.PRECIOUS: $(DEPLIST)
 
--include $(DEPS)
+-include $(DEPLIST)

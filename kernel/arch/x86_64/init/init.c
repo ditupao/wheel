@@ -256,12 +256,6 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
-static void task_a_proc();
-static void task_b_proc();
-
-task_t * tid_a = NULL;
-task_t * tid_b = NULL;
-
 static void root_proc() {
     // copy trampoline code
     u8 * src = (u8 *) &_trampoline_addr;
@@ -280,13 +274,28 @@ static void root_proc() {
         }
     }
 
+    // initialize device driver(s)
+    ps2kbd_dev_init();
+
+    dbg_print("tracing inside root task:\r\n");
     dbg_trace();
 
 #if 1
-    // parse and load elf file, embedded as RAMFS
-    u8  * bin_addr = &_ramfs_addr;
-    usize bin_size = (usize) (&_init_end - &_ramfs_addr);
-    if (OK == elf64_load(bin_addr, bin_size)) {
+#endif
+
+#if 1
+    // print the content of tar file
+    tar_dump(&_ramfs_addr);
+
+    // extract executable file from tar
+    u8 *  bin_addr;
+    usize bin_size;
+    tar_find(&_ramfs_addr, "./hello.app", &bin_addr, &bin_size);
+
+    if ((NULL == bin_addr) &&
+        (0    == bin_size)) {
+        dbg_print("hello.app not found!\r\n");
+    } else if (OK == elf64_load(bin_addr, bin_size)) {
         // allocate stack space for user-mode stack
         task_t    * tid = thiscpu_var(tid_prev);
         process_t * pid = tid->process;
@@ -304,28 +313,7 @@ static void root_proc() {
     }
 #endif
 
-    tid_a = task_create(init_pid, PRIORITY_NONRT, 1, task_a_proc, 0,0,0,0);
-    tid_b = task_create(init_pid, PRIORITY_NONRT, 1, task_b_proc, 0,0,0,0);
-    task_resume(tid_a);
-    task_resume(tid_b);
-
     while (1) {}
-}
-
-static void task_a_proc() {
-    int i = 0;
-    while (1) {
-        dbg_print("^%x", i++);
-        tick_delay(150);
-    }
-}
-
-static void task_b_proc() {
-    int i = 0;
-    while (1) {
-        dbg_print("=%d", i++);
-        tick_delay(200);
-    }
 }
 
 static void idle_proc() {

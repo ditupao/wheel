@@ -22,5 +22,6 @@
 #include <libk/vsprintf.h>
 #include <libk/list.h>
 #include <libk/rbtree.h>
+#include <libk/tar.h>
 
 #endif // WHEEL_H

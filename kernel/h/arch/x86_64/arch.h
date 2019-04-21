@@ -41,5 +41,6 @@
 
 #include "drvs/serial.h"
 #include "drvs/console.h"
+#include "drvs/ps2kbd.h"
 
 #endif // ARCH_X86_64_ARCH_H

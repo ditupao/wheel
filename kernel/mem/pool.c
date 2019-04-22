@@ -160,7 +160,7 @@ void pool_obj_free(pool_t * pool, void * obj) {
     pfn_t slab = (pfn_t) (pa >> PAGE_SHIFT);
 
     dbg_assert(PT_POOL == page_array[slab].type);
-    dbg_assert(((usize) obj % (pool->obj_size)) == 0);
+    dbg_assert(((usize) obj & (PAGE_SIZE - 1)) % pool->obj_size == 0);
 
     // add object to the freelist, and substract 1 from inuse
     * (u32 *) obj = page_array[slab].objects;

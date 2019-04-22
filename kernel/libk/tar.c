@@ -74,7 +74,7 @@ void tar_dump(u8 * tar) {
             filesize += hdr->size[i] - '0';
         }
 
-        dbg_print("entry: %s, mode: %s, size: %d.\r\n", hdr->name, hdr->mode, filesize);
+        dbg_print("entry: %s, size: %d.\r\n", hdr->name, filesize);
         offset += 512 + ROUND_UP(filesize, 512);
     }
 }

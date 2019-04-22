@@ -1,12 +1,11 @@
-DEFINE_SYSCALL(0,   SYSCALL_MAGIC,          magic)
+DEFINE_SYSCALL(0,   magic,          void)
 
-DEFINE_SYSCALL(1,   SYSCALL_SPAWN_THREAD,   spawn_thread,   void * entry)
-DEFINE_SYSCALL(2,   SYSCALL_SPAWN_PROCESS,  spawn_process,  const char * filename, const char * argv[], const char * envp[])
-DEFINE_SYSCALL(3,   SYSCALL_EXIT,           exit,           int exitcode)
-DEFINE_SYSCALL(4,   SYSCALL_WAIT,           wait,           int pid)
+DEFINE_SYSCALL(1,   spawn_thread,   void * entry)
+DEFINE_SYSCALL(2,   spawn_process,  const char * filename, const char * argv[], const char * envp[])
+DEFINE_SYSCALL(3,   exit,           int exitcode)
+DEFINE_SYSCALL(4,   wait,           int pid)
 
-DEFINE_SYSCALL(11,  SYSCALL_OPEN,           open,           const char * filename)
-DEFINE_SYSCALL(12,  SYSCALL_CLOSE,          close,          int fd)
-DEFINE_SYSCALL(13,  SYSCALL_READ,           read,           int fd, const char * buf, size_t count)
-DEFINE_SYSCALL(14,  SYSCALL_WRITE,          write,          int fd, const char * buf, size_t count)
-
+DEFINE_SYSCALL(11,  open,           const char * filename)
+DEFINE_SYSCALL(12,  close,          int fd)
+DEFINE_SYSCALL(13,  read,           int fd, const char * buf, size_t count)
+DEFINE_SYSCALL(14,  write,          int fd, const char * buf, size_t count)

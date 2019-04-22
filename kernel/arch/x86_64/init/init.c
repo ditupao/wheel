@@ -277,9 +277,6 @@ static void root_proc() {
     // initialize device driver(s)
     ps2kbd_dev_init();
 
-    dbg_print("tracing inside root task:\r\n");
-    dbg_trace();
-
 #if 1
     // print the content of tar file
     tar_dump(&_ramfs_addr);
@@ -289,15 +286,14 @@ static void root_proc() {
     usize bin_size;
     tar_find(&_ramfs_addr, "./hello.app", &bin_addr, &bin_size);
 
-    if ((NULL == bin_addr) &&
-        (0    == bin_size)) {
-        dbg_print("hello.app not found!\r\n");
-    } else if (OK == elf64_load(bin_addr, bin_size)) {
-        // allocate pages for user-mode stack
-        task_t    * tid = thiscpu_var(tid_prev);
-        process_t * pid = tid->process;
-        vmspace_t * vm  = &pid->vm;
+    task_t    * tid = thiscpu_var(tid_prev);
+    process_t * pid = tid->process;
 
+    if ((NULL == bin_addr) && (0 == bin_size)) {
+        dbg_print("hello.app not found!\r\n");
+    } else if (OK == elf64_load(pid, bin_addr, bin_size)) {
+        // allocate pages for user-mode stack
+        vmspace_t * vm  = &pid->vm;
         vmrange_t * stk = vmspace_alloc(vm, 16 * PAGE_SIZE);
         vmspace_map(vm, stk);
 

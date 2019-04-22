@@ -27,11 +27,22 @@ syscall:
     popq    %rbx
     ret
 
-#define DEFINE_SYSCALL(id, name, proc, ...) \
-.global proc;                               \
-proc:;                                      \
-    movl    $ id, %eax;                     \
-    jmp     syscall
+stub_syscall:
+    pushq   %rbx
+    pushq   %r10
+    pushq   %r11
+    movq    %rcx, %r10
+    syscall
+    popq    %r11
+    popq    %r10
+    popq    %rbx
+    ret
+
+#define DEFINE_SYSCALL(id, name, ...)   \
+.global name;                           \
+name:;                                  \
+    movl    $ id, %eax;                 \
+    jmp     stub_syscall
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL
 
@@ -49,5 +60,4 @@ _start:
     movl    %eax, %edi          // return value of main()
     call    exit                // should never return
 1:
-    hlt
     jmp     1b

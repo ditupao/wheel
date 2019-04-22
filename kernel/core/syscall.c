@@ -15,6 +15,12 @@ static void thread_entry(void * entry) {
     enter_user((usize) entry, range->addr + 16 * PAGE_SIZE);
 }
 
+// entry of the newly spawned process, new vmspace, start in kernel mode
+static void process_entry(void * entry, void * sp) {
+    dbg_print("new process started.\r\n");
+    enter_user((usize) entry, (usize) sp);
+}
+
 //------------------------------------------------------------------------------
 // system call handler functions
 
@@ -39,9 +45,6 @@ static int do_spawn_thread(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
     task_t * tid = task_create(cur->process, cur->priority, 0, thread_entry, entry, 0,0,0);
     task_resume(tid);
-
-    dbg_print("tracing inside sys_spawn:\r\n");
-    dbg_trace();
     return 0;
 }
 
@@ -51,9 +54,9 @@ static int do_spawn_process(const char * filename,
                             const char * argv[],
                             const char * envp[]) {
     // load elf and allocate vmrange from current process
-    // in order to do that, we have to (temporarily) switch to a new vmspace
+    // (temporarily) switch to a new vmspace and load elf from there
     // filename, argv and envp are not accessible from the new vmspace
-    // so we have to first copy them to a buffer in kernel space
+    // so we need to copy them to kernel memory first
 
     // calculate total size of filename
     int len_filename = strlen(filename);
@@ -120,21 +123,21 @@ static int do_spawn_process(const char * filename,
     regs_ctx_set(&tid->regs, new->vm.ctx);
     mmu_ctx_set(new->vm.ctx);
 
-    u8        * bin_addr;
-    usize       bin_size;
-    tar_find(&_ramfs_addr, filename, &bin_addr, &bin_size);
+    // read file from file system
+    u8  * bin_addr;
+    usize bin_size;
+    tar_find(&_ramfs_addr, bak_filename, &bin_addr, &bin_size);
 
-    if ((NULL == bin_addr) &&
-        (0    == bin_size)) {
+    if ((NULL == bin_addr) && (0 == bin_size)) {
         // executable file not found
-        dbg_print("[spawn_process] %s not found!\r\n", filename);
+        dbg_print("[spawn_process] %s not found!\r\n", bak_filename);
         process_delete(new);
         regs_ctx_set(&tid->regs, old->vm.ctx);
         mmu_ctx_set(old->vm.ctx);
         return -2;
-    } else if (OK != elf64_load(bin_addr, bin_size)) {
+    } else if (OK != elf64_load(new, bin_addr, bin_size)) {
         // elf load failed
-        dbg_print("[spawn_process] %s load failed!\r\n", filename);
+        dbg_print("[spawn_process] %s load failed!\r\n", bak_filename);
         process_delete(new);
         regs_ctx_set(&tid->regs, old->vm.ctx);
         mmu_ctx_set(old->vm.ctx);
@@ -151,7 +154,9 @@ static int do_spawn_process(const char * filename,
 
     // create new task
     // TODO: mark this new task as a subprocess of current one
-    task_t * root = task_create(new, tid->priority, 0, thread_entry, (void *) new->entry, 0,0,0);
+    task_t * root = task_create(new, tid->priority, 0, process_entry,
+                                (void *) new->entry, (void *) sp, 0,0);
+    root->ustack = stk;
 
     // switch back to old context
     regs_ctx_set(&tid->regs, old->vm.ctx);
@@ -180,7 +185,6 @@ static int do_write(int fd __UNUSED, const char * buf, size_t count __UNUSED) {
 }
 
 static int do_magic() {
-    dbg_print("[magical system call]\r\n");
     return 0xdeadbeef;
 }
 
@@ -189,7 +193,7 @@ __INIT void syscall_lib_init() {
         syscall_tbl[i] = (syscall_proc_t) do_unsupported;
     }
 
-    #define DEFINE_SYSCALL(id, name, proc, ...) syscall_tbl[id] = (syscall_proc_t) do_ ## proc;
+    #define DEFINE_SYSCALL(id, name, ...) syscall_tbl[id] = (syscall_proc_t) do_ ## name;
     #include SYSCALL_DEF
     #undef DEFINE_SYSCALL
 }

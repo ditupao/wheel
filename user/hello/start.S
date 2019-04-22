@@ -9,12 +9,6 @@
 .text
 .code64
 
-_start:
-    // sections are loaded at correct location
-    // stack space are allocated by the kernel
-    call    _entry
-    ret
-
 syscall:
     pushq   %rbx
     pushq   %r10
@@ -33,10 +27,28 @@ syscall:
 
     ret
 
-#define DEFINE_SYSCALL(id, name, proc, ...) \
-.global proc;                               \
-proc:;                                      \
-    movl    $ id, %eax;                     \
-    jmp     syscall
+stub_syscall:
+    pushq   %rbx
+    pushq   %r10
+    pushq   %r11
+    movq    %rcx, %r10
+    syscall
+    popq    %r11
+    popq    %r10
+    popq    %rbx
+    ret
+
+#define DEFINE_SYSCALL(id, name, ...)   \
+.global name;                           \
+name:;                                  \
+    movl    $ id, %eax;                 \
+    jmp     stub_syscall
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL
+
+_start:
+    // sections are loaded at correct location
+    // stack space are allocated by the kernel
+    call    _entry
+    call    exit
+    ret

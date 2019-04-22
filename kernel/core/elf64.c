@@ -36,7 +36,7 @@ typedef struct elf64_dyn {
 
 // load an elf file into the context of current process
 // and start executing the code in it (current task)
-int elf64_load(u8 * elf, usize len) {
+int elf64_load(process_t * pid, u8 * elf, usize len) {
     // retrieve and verify elf header
     elf64_hdr_t * hdr = (elf64_hdr_t *) elf;
     if ((sizeof(elf64_hdr_t) > len)   ||
@@ -67,7 +67,7 @@ int elf64_load(u8 * elf, usize len) {
     }
 
     // virtual address space of this process
-    process_t * pid = thiscpu_var(tid_prev)->process;
+    // process_t * pid = thiscpu_var(tid_prev)->process;
     vmspace_t * vm  = &pid->vm;
 
     usize page_required = 0;

@@ -11,7 +11,8 @@
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "ARCH=x86_64"
+                "ARCH=x86_64",
+                "SYSCALL_DEF=<${workspaceFolder}/syscall.def>"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17",

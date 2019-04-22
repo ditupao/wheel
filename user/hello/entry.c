@@ -1,35 +1,40 @@
 #include <stddef.h>
 
-#define SYS_EXIT    0
-#define SYS_SPAWN   1
+// generate syscall id values
+typedef enum syscall_id {
+    #define DEFINE_SYSCALL(id, name, proc, ...) name = id,
+    #include SYSCALL_DEF
+    #undef DEFINE_SYSCALL
+} syscall_id_t;
 
-#define SYS_OPEN    2
-#define SYS_CLOSE   3
+// generate syscall wrapper function prototypes
+#define DEFINE_SYSCALL(id, name, proc, ...) extern int proc (__VA_ARGS__);
+#include SYSCALL_DEF
+#undef DEFINE_SYSCALL
 
-#define SYS_READ    4
-#define SYS_WRITE   5
-
-#define SYS_MAGIC   255
-
-extern unsigned int syscall(int func, void * a1);
+extern int syscall(int func, ...);
 
 void another_thread_func() {
-    syscall(SYS_WRITE, "printing within another thread!\r\n");
-    syscall(SYS_EXIT, 0);
+    syscall(SYSCALL_WRITE, 1, "printing within another thread!\r\n");
+    syscall(SYSCALL_EXIT, 0);
 }
 
 void _entry() {
-    unsigned int ret = syscall(SYS_MAGIC, NULL);
+    unsigned int ret = syscall(SYSCALL_MAGIC, NULL);
     if (0xdeadbeef == ret) {
-        syscall(SYS_WRITE, "we got dead beef!\r\n");
+        syscall(SYSCALL_WRITE, 1, "we got dead beef!\r\n");
     } else {
-        syscall(SYS_WRITE, "we got something else!\r\n");
+        syscall(SYSCALL_WRITE, 1, "we got something else!\r\n");
     }
 
-    syscall(SYS_SPAWN, another_thread_func);
+    syscall(SYSCALL_SPAWN_THREAD, another_thread_func);
 
-    syscall(SYS_EXIT, 0);
-    syscall(SYS_WRITE, "already deleted!\r\n");
+    char * argv[] = { NULL };
+    char * envp[] = { NULL };
+    syscall(SYSCALL_SPAWN_PROCESS, "./setup.app", argv, envp);
+
+    syscall(SYSCALL_EXIT, 0);
+    syscall(SYSCALL_WRITE, 1, "already deleted!\r\n");
 
     while (1) {}
 }

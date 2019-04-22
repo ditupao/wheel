@@ -20,7 +20,7 @@ syscall:
     pushq   %r10
     pushq   %r11
 
-    movq    %rdi, %rax          // rax = syscall number
+    movl    %edi, %eax          // eax = syscall number
     movq    %rsi, %rdi
     movq    %rdx, %rsi
     movq    %rcx, %rdx
@@ -32,3 +32,11 @@ syscall:
     popq    %rbx
 
     ret
+
+#define DEFINE_SYSCALL(id, name, proc, ...) \
+.global proc;                               \
+proc:;                                      \
+    movl    $ id, %eax;                     \
+    jmp     syscall
+#include SYSCALL_DEF
+#undef DEFINE_SYSCALL

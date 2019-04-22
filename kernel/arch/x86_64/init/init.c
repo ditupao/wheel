@@ -281,14 +281,11 @@ static void root_proc() {
     dbg_trace();
 
 #if 1
-#endif
-
-#if 1
     // print the content of tar file
     tar_dump(&_ramfs_addr);
 
     // extract executable file from tar
-    u8 *  bin_addr;
+    u8  * bin_addr;
     usize bin_size;
     tar_find(&_ramfs_addr, "./hello.app", &bin_addr, &bin_size);
 
@@ -296,7 +293,7 @@ static void root_proc() {
         (0    == bin_size)) {
         dbg_print("hello.app not found!\r\n");
     } else if (OK == elf64_load(bin_addr, bin_size)) {
-        // allocate stack space for user-mode stack
+        // allocate pages for user-mode stack
         task_t    * tid = thiscpu_var(tid_prev);
         process_t * pid = tid->process;
         vmspace_t * vm  = &pid->vm;

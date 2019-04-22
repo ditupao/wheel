@@ -34,28 +34,6 @@ typedef struct elf64_dyn {
 #define DT_JMPREL   23
 #define DT_ENCODING 32
 
-// // TODO: we can change filename to vmobject, and use ELF64
-// //       as the only file format for applications.
-// // TODO: rename function as vmobject_load.
-
-// // represent a loaded elf file
-// // TODO: add file name, and a hashtable to map file to vmobject
-// typedef struct vmobject {
-//     dllist_t    segments;
-// } vmobject_t;
-
-// // represent a segment in the vmobject
-// typedef struct vmsegment {
-//     dlnode_t dl;
-//     usize    vaddr;     // prefered virtual address
-//     usize    size;
-//     u32      flags;
-//     pfn_t    pages;     // (single linked list) mapped page
-// } vmsegment_t;
-
-// static pool_t obj_pool;
-// static pool_t seg_pool;
-
 // load an elf file into the context of current process
 // and start executing the code in it (current task)
 int elf64_load(u8 * elf, usize len) {

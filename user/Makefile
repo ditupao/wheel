@@ -9,4 +9,4 @@ SUBDIRS :=  $(patsubst %/,%,$(dir $(wildcard */Makefile)))
 all: $(SUBDIRS)
 
 $(SUBDIRS)::
-	@ $(MAKE) -C $@ ARCH=$(ARCH) OUTDIR=$(OUTDIR)/$@ APPDIR=$(APPDIR) $(ACTION)
+	@ $(MAKE) -C $@ ARCH=$(ARCH) APPDIR=$(APPDIR) OUTDIR=$(OUTDIR)/$@ $(ACTION)

@@ -14,7 +14,8 @@ OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
 
 CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -ffreestanding -Wall -Wextra
-CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration
+CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration -Wno-cast-function-type
+CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
 DEPGEN   =  -MT $@ -MMD -MP -MF $(basename $@).t
 LFLAGS  :=  -nostdlib -lgcc -T arch/$(ARCH)/layout.ld -Wl,-Map,$(MAPFILE)
 

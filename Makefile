@@ -4,19 +4,18 @@ OUTDIR  :=  $(CURDIR)/bin
 ISODIR  :=  $(OUTDIR)/iso
 
 TGTARCH :=  x86_64
-APPFILE :=  $(OUTDIR)/user/setup.app    # must be same with user/Makefile
 BINFILE :=  $(OUTDIR)/kernel/wheel.bin  # must be same with kernel/Makefile
 ISOFILE :=  $(OUTDIR)/wheel.iso
 
 build:
 	@ echo "building the wheel operating system"
-	@ $(MAKE) -C user   ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/user   APPDIR=$(OUTDIR)/apps ACTION=build
-	@ $(MAKE) -C kernel ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/kernel APPDIR=$(OUTDIR)/apps        build
+	@ $(MAKE) -C user   ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   ACTION=build
+	@ $(MAKE) -C kernel ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel        build
 
 clean:
 	@ echo "cleaning the wheel operating system"
-	@ $(MAKE) -C user   ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/user   APPDIR=$(OUTDIR)/apps ACTION=clean
-	@ $(MAKE) -C kernel ARCH=$(TGTARCH) OUTDIR=$(OUTDIR)/kernel APPDIR=$(OUTDIR)/apps        clean
+	@ $(MAKE) -C user   ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   ACTION=clean
+	@ $(MAKE) -C kernel ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel        clean
 	@ rm -rf $(ISOFILE)
 
 iso: build

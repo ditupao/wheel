@@ -253,8 +253,6 @@ void int_unlock(u32 key) {
 //------------------------------------------------------------------------------
 // task support
 
-extern __NORETURN void task_entry(void * proc, void * a1, void * a2, void * a3, void * a4);
-
 void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
                void * a1, void * a2, void * a3, void * a4) {
     dbg_assert(0 != regs);
@@ -265,10 +263,9 @@ void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
     sp &= ~7UL;
 
     memset(regs, 0, sizeof(regs_t));
-    regs->rsp     = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
-    regs->rsp0    = (u64) sp;
-    regs->cr3     = (u64) ctx;
-
+    regs->rsp         = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
+    regs->rsp0        = (u64) sp;
+    regs->cr3         = (u64) ctx;
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment
     regs->rsp->rip    = (u64) task_entry; // entry address
@@ -279,7 +276,6 @@ void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
     regs->rsp->rsi    = (u64) a2;
     regs->rsp->rdx    = (u64) a3;
     regs->rsp->rcx    = (u64) a4;
-    // regs->rsp->r8     = (u64) a4;
 }
 
 void regs_ctx_set(regs_t * regs, usize ctx) {

@@ -11,8 +11,8 @@ APPFILE ?=  $(APPDIR)/$(NAME).app
 MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
 # TODO: different for each arch?
-CFLAGS  :=  -c -g -std=c99 -ffreestanding -fPIC -Wall -Wextra
-CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration
+CFLAGS  :=  -c -g -std=c99 -I . -ffreestanding -fPIC
+CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
 LFLAGS  :=  -nostdlib -lgcc -Ttext=0x100000
 
 build: $(APPFILE)

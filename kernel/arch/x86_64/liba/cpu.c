@@ -208,18 +208,16 @@ static void exp_default(int vec, int_frame_t * f) {
     dbg_print(" sp=%x:%llx", f->ss, f->rsp);
     dbg_print(" ip=%x:%llx", f->cs, f->rip);
     dbg_print(" flg=%llx err=%llx.\r\n", f->rflags, f->errcode);
-    dbg_trace();
+
+    // if the exception happens in kernel mode
+    if ((f->cs & 3) == 0) {
+        dbg_trace_from((u64 *) f->rbp);
+    }
 
     while (1) {}
 }
 
 static void int_default(int vec, int_frame_t * f __UNUSED) {
-    // if (NULL != isr_tbl[vec]) {
-    //     isr_tbl[vec](vec, f);
-    // } else {
-    //     dbg_print("INT#%x!\n", vec);
-    //     while (1) {}
-    // }
     dbg_print("INT#%x!\n", vec);
     while (1) {}
 }

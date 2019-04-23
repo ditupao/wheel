@@ -58,6 +58,13 @@ void dbg_trace() {
     }
 }
 
+void dbg_trace_from(u64 * rbp) {
+    for (int i = 0; rbp[1]; ++i) {
+        dbg_lookup(rbp[1]);
+        rbp = (u64 *) rbp[0];
+    }
+}
+
 // TODO: convert symbol table into another format
 __INIT void dbg_regist(u8 * sym_tbl, usize sym_len, u8 * str_tbl, usize str_len) {
     u32 n = ROUND_UP(ROUND_UP(sym_len, 8) + str_len, PAGE_SIZE) >> PAGE_SHIFT;

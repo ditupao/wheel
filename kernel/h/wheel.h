@@ -9,6 +9,7 @@
 #include <core/tick.h>
 #include <core/task.h>
 #include <core/semaphore.h>
+#include <core/pipe.h>
 #include <core/process.h>
 #include <core/syscall.h>
 #include <core/elf64.h>

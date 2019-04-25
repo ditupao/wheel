@@ -27,6 +27,7 @@ typedef struct page {
 #define PT_KERNEL       3       // generic kernel usage
 #define PT_POOL         4       // memory pool
 #define PT_KSTACK       5       // task's kernel stack page
+#define PT_PIPE         6       // buffer space of pipe
 
 // block order
 #define ORDER_COUNT     16

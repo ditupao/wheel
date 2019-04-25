@@ -24,24 +24,24 @@ static void process_entry(void * entry, void * sp) {
 //------------------------------------------------------------------------------
 // system call handler functions
 
-static int do_unsupported() {
+int do_unsupported() {
     dbg_print("unsupported syscall.\r\n");
     return 0;
 }
 
-static int do_exit(int exitcode) {
+int do_exit(int exitcode) {
     task_t * self = thiscpu_var(tid_prev);
     self->ret_val = exitcode;
     task_exit();
     return 0;
 }
 
-static int do_wait(int subpid __UNUSED) {
+int do_wait(int subpid __UNUSED) {
     // TODO
     return 0;
 }
 
-static int do_spawn_thread(void * entry) {
+int do_spawn_thread(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
     task_t * tid = task_create(cur->process, cur->priority, 0, thread_entry, entry, 0,0,0);
     task_resume(tid);
@@ -50,7 +50,7 @@ static int do_spawn_thread(void * entry) {
 
 extern u8 _ramfs_addr;
 
-static int do_spawn_process(const char * filename,
+int do_spawn_process(const char * filename,
                             const char * argv[],
                             const char * envp[]) {
     // load elf and allocate vmrange from current process
@@ -167,33 +167,37 @@ static int do_spawn_process(const char * filename,
     return 0;
 }
 
-static int do_open(const char * filename __UNUSED) {
+int do_open(const char * filename __UNUSED) {
     return 0;
 }
 
-static int do_close(int fd __UNUSED) {
+int do_close(int fd __UNUSED) {
     return 0;
 }
 
-static int do_read(int fd __UNUSED, const char * buf __UNUSED, size_t count __UNUSED) {
+int do_read(int fd __UNUSED, const char * buf __UNUSED, size_t count __UNUSED) {
     return 0;
 }
 
-static int do_write(int fd __UNUSED, const char * buf, size_t count __UNUSED) {
+int do_write(int fd __UNUSED, const char * buf, size_t count __UNUSED) {
     dbg_print(buf);
     return 0;
 }
 
-static int do_magic() {
+int do_magic() {
     return 0xdeadbeef;
 }
+
+//------------------------------------------------------------------------------
+// fill system call table
 
 __INIT void syscall_lib_init() {
     for (int i = 0; i < SYSCALL_NUM_COUNT; ++i) {
         syscall_tbl[i] = (syscall_proc_t) do_unsupported;
     }
 
-    #define DEFINE_SYSCALL(id, name, ...) syscall_tbl[id] = (syscall_proc_t) do_ ## name;
+    #define DEFINE_SYSCALL(id, name, ...)   \
+        syscall_tbl[id] = (syscall_proc_t) do_ ## name;
     #include SYSCALL_DEF
     #undef DEFINE_SYSCALL
 }

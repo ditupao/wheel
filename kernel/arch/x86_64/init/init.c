@@ -256,6 +256,10 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
+static void kbd_proc();
+
+pipe_t * pp = NULL;
+
 static void root_proc() {
     // copy trampoline code
     u8 * src = (u8 *) &_trampoline_addr;
@@ -277,7 +281,12 @@ static void root_proc() {
     // initialize device driver(s)
     ps2kbd_dev_init();
 
+    task_t * kbd = task_create(init_pid, 1, root_tid->cpu_idx, kbd_proc, 0,0,0,0);
+    task_resume(kbd);
+
 #if 1
+    // TODO: use `do_spawn_process` to run init process
+
     // print the content of tar file
     tar_dump(&_ramfs_addr);
 
@@ -307,6 +316,16 @@ static void root_proc() {
 #endif
 
     while (1) {}
+}
+
+static void kbd_proc() {
+    pp = pipe_create();
+    dbg_print("started listening on keyboard:\r\n");
+    while (1) {
+        u8 buf[10];
+        pipe_read(pp, buf, 1);
+        dbg_print("%c", buf[0]);
+    }
 }
 
 static void idle_proc() {

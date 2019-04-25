@@ -111,10 +111,18 @@ static int kbd_r_alt     = 0;
 // notice that 0 appears first, different from keyboard layout
 static const char syms[] = ")!@#$%^&*(";
 
+
+// send converted ascii to pipe
+extern pipe_t * pp;
+static void send_ascii(char c) {
+    u8 buf[10];
+    buf[0] = (u8) c;
+    pipe_write(pp, buf, 1);
+}
+
 // convert from key code to ascii
 static void send_keycode(keycode_t key, int release) {
     if (release) {
-        // dbg_print("'%02x'", key);
         switch (key) {
         case KEY_LEFTSHIFT:  kbd_l_shift   = 0; break;
         case KEY_RIGHTSHIFT: kbd_r_shift   = 0; break;
@@ -125,7 +133,6 @@ static void send_keycode(keycode_t key, int release) {
         default:                                break;
         }
     } else {
-        // dbg_print("<%02x>", key);
         switch (key) {
         case KEY_LEFTSHIFT:  kbd_l_shift   = 1; break;
         case KEY_RIGHTSHIFT: kbd_r_shift   = 1; break;
@@ -144,9 +151,9 @@ static void send_keycode(keycode_t key, int release) {
         case KEY_U: case KEY_V: case KEY_W: case KEY_X: case KEY_Y:
         case KEY_Z:
             if (kbd_capslock ^ (kbd_l_shift | kbd_r_shift)) {
-                dbg_print("%c", 'A' + (key - KEY_A));
+                send_ascii('A' + (key - KEY_A));
             } else {
-                dbg_print("%c", 'a' + (key - KEY_A));
+                send_ascii('a' + (key - KEY_A));
             }
             break;
 
@@ -154,94 +161,94 @@ static void send_keycode(keycode_t key, int release) {
         case KEY_0: case KEY_1: case KEY_2: case KEY_3: case KEY_4:
         case KEY_5: case KEY_6: case KEY_7: case KEY_8: case KEY_9:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("%c", syms[key - KEY_0]);
+                send_ascii(syms[key - KEY_0]);
             } else {
-                dbg_print("%c", '0' + (key - KEY_0));
+                send_ascii('0' + (key - KEY_0));
             }
             break;
 
         case KEY_BACKTICK:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("~");
+                send_ascii('~');
             } else {
-                dbg_print("`");
+                send_ascii('`');
             }
             break;
         case KEY_MINUS:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("_");
+                send_ascii('_');
             } else {
-                dbg_print("-");
+                send_ascii('-');
             }
             break;
         case KEY_EQUAL:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("+");
+                send_ascii('+');
             } else {
-                dbg_print("=");
+                send_ascii('=');
             }
             break;
         case KEY_LEFTBRACE:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("{");
+                send_ascii('{');
             } else {
-                dbg_print("[");
+                send_ascii('[');
             }
             break;
         case KEY_RIGHTBRACE:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("}");
+                send_ascii('}');
             } else {
-                dbg_print("]");
+                send_ascii(']');
             }
             break;
         case KEY_SEMICOLON:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print(":");
+                send_ascii(':');
             } else {
-                dbg_print(";");
+                send_ascii(';');
             }
             break;
         case KEY_QUOTE:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("\"");
+                send_ascii('\"');
             } else {
-                dbg_print("'");
+                send_ascii('\'');
             }
             break;
         case KEY_COMMA:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("<");
+                send_ascii('<');
             } else {
-                dbg_print(",");
+                send_ascii(',');
             }
             break;
         case KEY_DOT:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print(">");
+                send_ascii('>');
             } else {
-                dbg_print(".");
+                send_ascii('.');
             }
             break;
         case KEY_SLASH:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("?");
+                send_ascii('?');
             } else {
-                dbg_print("/");
+                send_ascii('/');
             }
             break;
         case KEY_BACKSLASH:
             if (kbd_l_shift | kbd_r_shift) {
-                dbg_print("|");
+                send_ascii('|');
             } else {
-                dbg_print("\\");
+                send_ascii('\\');
             }
             break;
 
         // whitespace
-        case KEY_TAB:   dbg_print("\t");    break;
-        case KEY_SPACE: dbg_print(" ");     break;
-        case KEY_ENTER: dbg_print("\r\n");  break;
+        case KEY_TAB:   send_ascii('\t');   break;
+        case KEY_SPACE: send_ascii(' ');    break;
+        case KEY_ENTER: send_ascii('\n');   break;
 
         default:
             break;
@@ -398,7 +405,7 @@ static void digest_scan_code(u8 scancode) {
 static void ps2kbd_int_handler(int vec __UNUSED, int_frame_t * sp __UNUSED) {
     if (in8(PS2KBD_CTRL_PORT) & 1) {
         u8 scancode = in8(PS2KBD_DATA_PORT);
-        // dbg_print("`%02x`", scancode);
+        // send_ascii('`%02x`", scancod');
         digest_scan_code(scancode);
     }
     loapic_send_eoi();

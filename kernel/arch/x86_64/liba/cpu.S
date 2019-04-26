@@ -10,7 +10,7 @@ GLOBAL_FUNC(syscall_entry)
 GLOBAL_FUNC(task_entry)
 GLOBAL_FUNC(task_switch)
 
-GLOBAL_FUNC(enter_user)
+GLOBAL_FUNC(return_to_user)
 GLOBAL_FUNC(load_gdtr)
 GLOBAL_FUNC(load_idtr)
 GLOBAL_FUNC(load_tr)
@@ -110,6 +110,7 @@ vec = vec + 1
 .endr
 
 // common code for exception handling
+// exceptions cannot re-enter, so `sti/cli` are not used
 exception_stub:
     save_regs                       // save all registers
     movl    %eax, %edi              // rdi = vector number, clear upper 32 bits
@@ -138,26 +139,27 @@ exception_stub:
     iretq                           // return from exception
 
 // common code for interrupt handling
+// interrupt re-enter is allowed, wrap isr handler with `sti/cli`
+// also use int_depth to guide stack switching
 interrupt_stub:
     save_regs                       // save registers to current stack
     movq    %rax, %rdi              // rdi = vector number
     movq    %rsp, %rsi              // rsi = stack frame
 
     testl   $3, 0x88(%rsp)          // if come from user mode
-    je      3f
+    je      1f
     swapgs                          // swap gs.base with kernel-gs.base
-3:
+1:
     incl    %gs:(int_depth)
     movl    %gs:(int_depth), %eax
-    cmpl    $1, %eax                // check interrupt re-entry
-    jne     _no_stack_switch
+    cmpl    $1, %eax                // check interrupt re-enter
+    jne     2f
 
     movq    %gs:(tid_prev), %rax
     movq    %rsp, (%rax)            // save to tid_prev->regs->rsp
-    movq    %gs:(int_rsp), %rsp // switch to interrupt stack
+    movq    %gs:(int_rsp), %rsp     // switch to interrupt stack
 
-_no_stack_switch:
-    sti
+2:
     pushq   $0                      // dummy return addr
     pushq   $0                      // dummy rbp value
     movq    %rsp, %rbp
@@ -165,35 +167,36 @@ _no_stack_switch:
     movq    $isr_tbl, %rax
     andl    $0xff, %edi             // rdi < 256 (clear upper 32 bits)
     movq    (%rax, %rdi, 8), %rax   // rax = isr_tbl[rdi]
+    sti
     call    * %rax
-
-    addq    $16, %rsp               // pop dummy return addr and rbp
     cli
+    addq    $16, %rsp               // pop dummy return addr and rbp
 
     decl    %gs:(int_depth)
     movl    %gs:(int_depth), %eax
-    cmpl    $0, %eax
-    jne     _no_stack_restore       // if we're still inside ISR
+    cmpl    $0, %eax                // if we're still inside ISR
+    jne     4f
 
-    movq    %gs:(tid_next), %rax
-    movq    0x00(%rax), %rsp        // get tid_next->regs->rsp
-    movq    0x08(%rax), %rbx        // get tid_next->regs->rsp0
-    movq    0x10(%rax), %rcx        // get tid_next->regs->cr3
-    movq    %rax, %gs:(tid_prev)    // update `tid_prev`
+return_to_task:
+    movq    %gs:(tid_next), %rdi
+    movq    0x00(%rdi), %rsp        // get tid_next->regs->rsp
+    movq    0x08(%rdi), %rbx        // get tid_next->regs->rsp0
+    movq    0x10(%rdi), %rcx        // get tid_next->regs->cr3
+    movq    %rdi, %gs:(tid_prev)    // update `tid_prev`
     movq    $tss, %rdx
     movq    %rbx, %gs:4(%rdx)       // store rsp0 in tss (maybe unaligned?)
+    testq   %rcx, %rcx
+    jz      3f                      // regs->cr3 == 0 means kernel task
     movq    %cr3, %rdx
-    cmpq    %rcx, %rdx              // compare target cr3 and current cr3
-    je      4f                      // still in the same address space
+    cmpq    %rcx, %rdx
+    je      3f                      // still in the same address space
     movq    %rcx, %cr3              // load new page table into cr3
-4:
+3:
     call    work_dequeue            // flush work queue
-
-_no_stack_restore:
-    testl   $3, 0x88(%rsp)          // if going to user mode
-    je      5f
+    testl   $3, 0x88(%rsp)          // whether going to user mode
+    je      4f
     swapgs
-5:
+4:
     restore_regs                    // restore all registers
     addq    $8, %rsp                // skip error code
     iretq                           // return from exception
@@ -292,22 +295,7 @@ task_switch:
     save_regs                       // save rest of the registers on stack
     movq    %rsp, (%rsi)            // store the stack top into TCB
 
-    movq    0x00(%rdi), %rsp        // get tid_next->regs->rsp
-    movq    0x08(%rdi), %rbx        // get tid_next->regs->rsp0
-    movq    0x10(%rdi), %rcx        // get tid_next->regs->cr3
-    movq    %rdi, %gs:(tid_prev)    // update `tid_prev`, context already saved
-    movq    $tss, %rax
-    movq    %rbx, %gs:4(%rax)       // store rsp0 in tss
-    movq    %cr3, %rax
-    cmpq    %rcx, %rax              // compare target cr3 and current cr3
-    je      6f                      // still in the same address space
-    movq    %rcx, %cr3              // load new page table into cr3
-6:
-    call    work_dequeue            // flush work queue
-
-    restore_regs                    // restore all registers
-    addq    $8, %rsp                // skip error code
-    iretq
+    jmp     return_to_task
 
 _no_task_switch:
     pushq   %rax
@@ -315,7 +303,7 @@ _no_task_switch:
     ret
 
 // TODO: use sysret instead of iret to jump to user mode
-enter_user:
+return_to_user:
     swapgs
     movq    %rsi, %rsp  // switch to user stack
     pushfq

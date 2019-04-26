@@ -26,8 +26,8 @@
 #define DMA_END         0x0000000001000000UL    // 16MB
 #define NORMAL_START    0x0000000001000000UL    // 16MB
 #define NORMAL_END      0xffffffffffffffffUL    // +inf
-#define HIGHMEM_START   0xffffffffffffffffUL    // +inf
-#define HIGHMEM_END     0xffffffffffffffffUL    // +inf
+// #define HIGHMEM_START   0xffffffffffffffffUL    // +inf
+// #define HIGHMEM_END     0xffffffffffffffffUL    // +inf
 
 #include "multiboot.h"
 

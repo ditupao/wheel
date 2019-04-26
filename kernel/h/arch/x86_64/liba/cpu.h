@@ -177,8 +177,8 @@ extern        void int_unlock (u32 key);
 // task support
 
 extern void  task_switch   ();
-extern void  enter_user    (usize ip, usize sp);
-extern void  regs_init     (regs_t * regs, usize ctx, usize sp, void * proc,
+extern void  return_to_user(usize ip, usize sp);
+extern void  regs_init     (regs_t * regs, usize sp, void * proc,
                             void * a1, void * a2, void * a3, void * a4);
 extern void  regs_ctx_set  (regs_t * regs, usize ctx);
 extern usize regs_ctx_get  (regs_t * regs);

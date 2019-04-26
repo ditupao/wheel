@@ -299,6 +299,7 @@ int vmspace_map(vmspace_t * space, vmrange_t * range) {
         mmu_map(space->ctx, va, pa, 1, 0);
     }
 
+    dbg_print("= mapping [%llx, %llx).\r\n", range->addr, range->addr + range->size);
     irq_spin_give(&space->lock, key);
     return OK;
 }

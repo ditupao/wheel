@@ -108,17 +108,18 @@ static int kbd_r_control = 0;
 static int kbd_l_alt     = 0;
 static int kbd_r_alt     = 0;
 
-// notice that 0 appears first, different from keyboard layout
-static const char syms[] = ")!@#$%^&*(";
-
+// defined in core/kbd.c
+extern pipe_t * kbd_pipe;
 
 // send converted ascii to pipe
-extern pipe_t * pp;
 static void send_ascii(char c) {
     u8 buf[10];
     buf[0] = (u8) c;
-    pipe_write(pp, buf, 1);
+    pipe_write(kbd_pipe, buf, 1);
 }
+
+// notice that 0 appears first, different from keyboard layout
+static const char syms[] = ")!@#$%^&*(";
 
 // convert from key code to ascii
 static void send_keycode(keycode_t key, int release) {

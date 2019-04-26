@@ -209,9 +209,18 @@ static void exp_default(int vec, int_frame_t * f) {
     dbg_print(" ip=%x:%llx", f->cs, f->rip);
     dbg_print(" flg=%llx err=%llx.\r\n", f->rflags, f->errcode);
 
+    if (14 == vec) {
+        dbg_print("attempt to %s address %llx.\r\n",
+                  (f->errcode & 2) ? "write" : "read",
+                  read_cr2());
+        if ((f->errcode & 1) == 0) {
+            dbg_print("address not valid.\r\n");
+        }
+    }
+
     // if the exception happens in kernel mode
     if ((f->cs & 3) == 0) {
-        dbg_trace_from((u64 *) f->rbp);
+        dbg_trace_from(f->rip, (u64 *) f->rbp);
     }
 
     while (1) {}
@@ -251,7 +260,7 @@ void int_unlock(u32 key) {
 //------------------------------------------------------------------------------
 // task support
 
-void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
+void regs_init(regs_t * regs, usize sp, void * proc,
                void * a1, void * a2, void * a3, void * a4) {
     dbg_assert(0 != regs);
     dbg_assert(0 != sp);
@@ -260,10 +269,11 @@ void regs_init(regs_t * regs, usize ctx, usize sp, void * proc,
     // stack pointer must be 8-byte aligned
     sp &= ~7UL;
 
-    memset(regs, 0, sizeof(regs_t));
-    regs->rsp         = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
-    regs->rsp0        = (u64) sp;
-    regs->cr3         = (u64) ctx;
+    regs->rsp  = (int_frame_t *) ((u64) sp - sizeof(int_frame_t));
+    regs->rsp0 = (u64) sp;
+    regs->cr3  = 0UL;
+
+    memset(regs->rsp, 0, sizeof(int_frame_t));
     regs->rsp->cs     = 0x08;             // kernel code segment
     regs->rsp->ss     = 0x10;             // kernel data segment
     regs->rsp->rip    = (u64) task_entry; // entry address

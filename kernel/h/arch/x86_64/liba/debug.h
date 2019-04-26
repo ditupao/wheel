@@ -3,9 +3,10 @@
 
 #include <base.h>
 
-extern void dbg_print(const char * msg, ...);
-extern void dbg_trace();
-extern void dbg_trace_from(u64 * rbp);
+extern void dbg_print (const char * msg, ...);
+extern int  dbg_lookup(u64 addr);
+extern void dbg_trace ();
+extern void dbg_trace_from(u64 rip, u64 * rbp);
 
 #define dbg_assert(x) ({ if (!(x)) {                            \
     dbg_print("assertion failed %s:%d.\n", __FILE__, __LINE__); \

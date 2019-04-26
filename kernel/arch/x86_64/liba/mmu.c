@@ -29,7 +29,7 @@
 #define MMU_PAT_2M  0x0000000000001000UL    // (PAT) for 2M PDE
 
 // contains mapping for kernel space
-usize kernel_ctx;
+usize kernel_ctx = 0UL;
 
 // defined in `layout.ld`
 extern u8 _init_end;
@@ -79,6 +79,8 @@ static void mmu_map_4k(usize ctx, u64 va, u64 pa, u64 fields) {
 
     // fill the final entry
     pt[pte] = (pa & MMU_ADDR) | fields | MMU_P;
+
+    // clear TLB entry
     if (read_cr3() == ctx) {
         ASM("invlpg (%0)" :: "r"(va));
     }
@@ -113,6 +115,8 @@ static void mmu_map_2m(usize ctx, u64 va, u64 pa, u64 fields) {
 
     // fill the final entry
     pd[pde] = (pa & MMU_ADDR) | fields | MMU_PS | MMU_P;
+
+    // clear TLB entry
     if (read_cr3() == ctx) {
         ASM("invlpg (%0)" :: "r"(va));
     }
@@ -132,7 +136,7 @@ void mmu_ctx_set(usize ctx) {
 // create a new context table, allocate space for top-level table
 usize mmu_ctx_create() {
     pfn_t pml4t = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
-    u64   ctx   = (u64) pml4t << PAGE_SHIFT;
+    usize ctx   = (usize) pml4t << PAGE_SHIFT;
     memset(phys_to_virt(ctx), 0, PAGE_SIZE / 2);        // user space
     memcpy(phys_to_virt(ctx)        + PAGE_SIZE / 2,    // kernel space
            phys_to_virt(kernel_ctx) + PAGE_SIZE / 2,
@@ -180,7 +184,7 @@ usize mmu_translate(usize ctx, usize va) {
 void mmu_map(usize ctx, usize va, usize pa, usize n, u32 attr) {
     u64 v = (u64) va;
     u64 p = (u64) pa;
-    // dbg_print(">>> mapping 0x%llx to 0x%llx.\r\n", va, pa);
+
     dbg_assert(IS_ALIGNED(v, PAGE_SIZE));
     dbg_assert(IS_ALIGNED(p, PAGE_SIZE));
 
@@ -260,6 +264,10 @@ void mmu_unmap(usize ctx, usize va, usize n) {
 __INIT void kernel_ctx_init() {
     usize virt, phys, mark;
 
+    pfn_t pml4t = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 0);
+    kernel_ctx  = (usize) pml4t << PAGE_SHIFT;
+    memset(phys_to_virt(kernel_ctx), 0, PAGE_SIZE);
+
     // boot, trampoline and init sections
     virt = KERNEL_VMA;
     phys = KERNEL_LMA;
@@ -287,4 +295,7 @@ __INIT void kernel_ctx_init() {
     // map all physical memory to higher half
     // TODO: only map present pages, and add IO/Local APIC in driver
     mmu_map(kernel_ctx, MAPPED_ADDR, 0, 1U << 20, MMU_NOEXEC|MMU_KERNEL);
+
+    // switch to kernel context
+    mmu_ctx_set(kernel_ctx);
 }

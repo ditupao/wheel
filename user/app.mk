@@ -12,6 +12,7 @@ MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
 # TODO: different for each arch?
 CFLAGS  :=  -c -g -std=c99 -I . -ffreestanding -fPIC
+CFLAGS  +=  -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-fma
 CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
 LFLAGS  :=  -nostdlib -lgcc -Ttext=0x100000
 

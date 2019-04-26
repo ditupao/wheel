@@ -11,7 +11,7 @@ typedef struct zone {
 
 static zone_t zone_dma;
 static zone_t zone_normal;
-static zone_t zone_highmem;
+// static zone_t zone_highmem;
 
 //------------------------------------------------------------------------------
 // allocate a block from zone, no spinlock protection
@@ -103,9 +103,9 @@ static inline zone_t * zone_for(usize start, usize end) {
     if ((NORMAL_START <= start) && (end <= NORMAL_END)) {
         return &zone_normal;
     }
-    if ((HIGHMEM_START <= start) && (end <= HIGHMEM_END)) {
-        return &zone_highmem;
-    }
+    // if ((HIGHMEM_START <= start) && (end <= HIGHMEM_END)) {
+    //     return &zone_highmem;
+    // }
     return NULL;
 }
 #pragma GCC diagnostic pop
@@ -117,15 +117,15 @@ pfn_t page_block_alloc(u32 zones, int order) {
         return NO_PAGE; // invalid parameter
     }
 
-    if (zones & ZONE_HIGHMEM) {
-        u32 key = irq_spin_take(&zone_highmem.lock);
-        pfn_t blk = zone_block_alloc(&zone_highmem, order);
-        irq_spin_give(&zone_highmem.lock, key);
-        dbg_assert((blk & ((1U << order) - 1)) == 0);
-        if (NO_PAGE != blk) {
-            return blk;
-        }
-    }
+    // if (zones & ZONE_HIGHMEM) {
+    //     u32 key = irq_spin_take(&zone_highmem.lock);
+    //     pfn_t blk = zone_block_alloc(&zone_highmem, order);
+    //     irq_spin_give(&zone_highmem.lock, key);
+    //     dbg_assert((blk & ((1U << order) - 1)) == 0);
+    //     if (NO_PAGE != blk) {
+    //         return blk;
+    //     }
+    // }
 
     if (zones & ZONE_NORMAL) {
         u32 key = irq_spin_take(&zone_normal.lock);
@@ -213,9 +213,9 @@ usize free_page_count(u32 zones) {
     if (zones & ZONE_NORMAL) {
         count += zone_normal.page_count;
     }
-    if (zones & ZONE_HIGHMEM) {
-        count += zone_highmem.page_count;
-    }
+    // if (zones & ZONE_HIGHMEM) {
+    //     count += zone_highmem.page_count;
+    // }
     return count;
 }
 
@@ -243,10 +243,10 @@ void dump_page_layout(u32 zones) {
         dbg_print("== zone normal:\r\n");
         dump_layout(&zone_normal);
     }
-    if (zones & ZONE_HIGHMEM) {
-        dbg_print("== zone highmem:\r\n");
-        dump_layout(&zone_highmem);
-    }
+    // if (zones & ZONE_HIGHMEM) {
+    //     dbg_print("== zone highmem:\r\n");
+    //     dump_layout(&zone_highmem);
+    // }
 }
 
 //------------------------------------------------------------------------------
@@ -329,17 +329,17 @@ void pglist_free_all(pglist_t * list) {
 __INIT void page_lib_init() {
     zone_dma.lock     = SPIN_INIT;
     zone_normal.lock  = SPIN_INIT;
-    zone_highmem.lock = SPIN_INIT;
+    // zone_highmem.lock = SPIN_INIT;
     zone_dma.page_count     = 0;
     zone_normal.page_count  = 0;
-    zone_highmem.page_count = 0;
+    // zone_highmem.page_count = 0;
     for (int i = 0; i < ORDER_COUNT; ++i) {
         zone_dma.list[i].head     = NO_PAGE;
         zone_dma.list[i].tail     = NO_PAGE;
         zone_normal.list[i].head  = NO_PAGE;
         zone_normal.list[i].tail  = NO_PAGE;
-        zone_highmem.list[i].head = NO_PAGE;
-        zone_highmem.list[i].tail = NO_PAGE;
+        // zone_highmem.list[i].head = NO_PAGE;
+        // zone_highmem.list[i].tail = NO_PAGE;
     }
 }
 

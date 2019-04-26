@@ -44,7 +44,7 @@ typedef struct pglist {
 // memory zone bit masks
 #define ZONE_DMA        1
 #define ZONE_NORMAL     2
-#define ZONE_HIGHMEM    4
+// #define ZONE_HIGHMEM    4
 
 extern page_t * page_array;
 extern usize    page_count;

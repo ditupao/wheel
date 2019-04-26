@@ -5,8 +5,20 @@ static char        * str_addr = NULL;
 static usize  sym_size = 0;
 static usize  str_size = 0;
 
+void dbg_print(const char * msg, ...) {
+    va_list args;
+    char buf[1024];
+
+    va_start(args, msg);
+    vsnprintf(buf, 1023, msg, args);
+    va_end(args);
+
+    serial_puts(buf);
+    console_puts(buf);
+}
+
 // return 1 if we've achieved root
-static int dbg_lookup(u64 addr) {
+int dbg_lookup(u64 addr) {
     elf64_sym_t * func = NULL;
     usize         dist = (usize) -1;
     for (usize i = 0; i < sym_size; ++i) {
@@ -32,34 +44,22 @@ static int dbg_lookup(u64 addr) {
     return 0;
 }
 
-void dbg_print(const char * msg, ...) {
-    va_list args;
-    char buf[1024];
-
-    va_start(args, msg);
-    vsnprintf(buf, 1023, msg, args);
-    va_end(args);
-
-    serial_puts(buf);
-    console_puts(buf);
-}
-
 void dbg_trace() {
     u64 * rbp;
     ASM("movq %%rbp, %0" : "=r"(rbp));
 
     // until we got a NULL return address
-    for (int i = 0; rbp[1]; ++i) {
-        // if (dbg_lookup(rbp[1])) {
-        //     break;
-        // }
+    while (rbp[1]) {
         dbg_lookup(rbp[1]);
         rbp = (u64 *) rbp[0];
     }
 }
 
-void dbg_trace_from(u64 * rbp) {
-    for (int i = 0; rbp[1]; ++i) {
+void dbg_trace_from(u64 rip, u64 * rbp) {
+    dbg_lookup(rip);
+
+    // until we got a NULL return address
+    while (rbp[1]) {
         dbg_lookup(rbp[1]);
         rbp = (u64 *) rbp[0];
     }

@@ -107,21 +107,14 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
 
-// kernel page table， defined in `mmu.c`
-extern usize kernel_ctx;
-
 // init process, root task and idle tasks
-static            process_t * init_pid;
+// static            process_t * init_pid;
 static __INITDATA task_t    * root_tid;
 static __PERCPU   task_t    * idle_tid;
 
 // forward declarations
 static void root_proc();
 static void idle_proc();
-
-// // for test only
-// semaphore_t sem_tst;
-// wdog_t      wd_tst;
 
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     // enable early debug output
@@ -190,10 +183,9 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     process_lib_init();
     syscall_lib_init();
 
-    // init kernel address mapping and init process
+    // up to now we are using temporary page table in boot.S
+    // init kernel context and switch to that page table
     kernel_ctx_init();
-    init_pid = process_create();
-    mmu_ctx_set(init_pid->vm.ctx);
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
@@ -201,8 +193,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for root and idle-0
-    root_tid = task_create(init_pid, 10, 0, root_proc, 0,0,0,0);
-    thiscpu_var(idle_tid) = task_create(init_pid, PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+    root_tid = task_create(PRIORITY_NONRT, 0, root_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
     dbg_print("> cpu %02d started.\r\n", cpu_activated);
@@ -231,7 +223,7 @@ __INIT __NORETURN void sys_init_ap() {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for idle task
-    thiscpu_var(idle_tid) = task_create(init_pid, PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
 
     // activate idle-x, and switch task manually
     dbg_print("> cpu %02d started.\r\n", cpu_activated);
@@ -256,9 +248,7 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
-static void kbd_proc();
-
-pipe_t * pp = NULL;
+extern __INIT void kbd_lib_init();
 
 static void root_proc() {
     // copy trampoline code
@@ -279,12 +269,14 @@ static void root_proc() {
     }
 
     // initialize device driver(s)
+    kbd_lib_init();
     ps2kbd_dev_init();
 
-    task_t * kbd = task_create(init_pid, 1, root_tid->cpu_idx, kbd_proc, 0,0,0,0);
-    task_resume(kbd);
+    const char * argv[] = { NULL };
+    const char * envp[] = { NULL };
+    do_spawn_process("./hello.app", argv, envp);
 
-#if 1
+#if 0
     // TODO: use `do_spawn_process` to run init process
 
     // print the content of tar file
@@ -309,23 +301,13 @@ static void root_proc() {
         dbg_assert(NULL == tid->ustack);
         tid->ustack = stk;
 
-        enter_user(pid->entry, stk->addr + 16 * PAGE_SIZE);
+        return_to_user(pid->entry, stk->addr + 16 * PAGE_SIZE);
     } else {
         dbg_print("elf file parsing error, cannot execute!\r\n");
     }
 #endif
 
     while (1) {}
-}
-
-static void kbd_proc() {
-    pp = pipe_create();
-    dbg_print("started listening on keyboard:\r\n");
-    while (1) {
-        u8 buf[10];
-        pipe_read(pp, buf, 1);
-        dbg_print("%c", buf[0]);
-    }
 }
 
 static void idle_proc() {

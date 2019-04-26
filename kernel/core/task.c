@@ -100,12 +100,12 @@ u32 sched_cont(task_t * tid, u32 state) {
 // TODO: also save tid in page_array (kernel object always in higher half,
 //       8-bytes aligned? 47-3=45 bits, so only 45 bits is enough. If we
 //       want to use less bits, we can allocate tcb only from one pool)
-task_t * task_create(process_t * pid, int priority, int cpu_idx,
-                     void * proc, void * a1, void * a2, void * a3, void * a4) {
+task_t * task_create(int priority, int cpu_idx, void * proc,
+                     void * a1, void * a2, void * a3, void * a4) {
     dbg_assert((0 <= priority) && (priority < PRIORITY_COUNT));
     dbg_assert((0 <= cpu_idx)  && (cpu_idx  < cpu_installed));
 
-    // allocate
+    // allocate tcb
     task_t * tid = pool_obj_alloc(&tcb_pool);
 
     // allocate space for kernel stack, must be continuous
@@ -122,7 +122,7 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
     }
 
     usize vstk = (usize) phys_to_virt((usize) pstk << PAGE_SHIFT);
-    regs_init(&tid->regs, pid->vm.ctx, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+    regs_init(&tid->regs, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
     tid->lock      = SPIN_INIT;
     tid->state     = TS_SUSPEND;
@@ -136,16 +136,16 @@ task_t * task_create(process_t * pid, int priority, int cpu_idx,
     tid->dl_sched  = DLNODE_INIT;
     tid->queue     = NULL;
     tid->dl_proc   = DLNODE_INIT;
-    tid->process   = pid;
+    tid->process   = NULL;
 
     page_array[pstk].block = 1;
     page_array[pstk].order = 4;
     pglist_push_head(&tid->kstack, pstk);
 
-    // put the task into process, and update resource list
-    u32 key = irq_spin_take(&pid->lock);
-    dl_push_tail(&pid->tasks, &tid->dl_proc);
-    irq_spin_give(&pid->lock, key);
+    // // put the task into process, and update resource list
+    // u32 key = irq_spin_take(&pid->lock);
+    // dl_push_tail(&pid->tasks, &tid->dl_proc);
+    // irq_spin_give(&pid->lock, key);
 
     return tid;
 }
@@ -175,7 +175,7 @@ static void task_cleanup(task_t * tid) {
     pool_obj_free(&tcb_pool, tid);
 }
 
-// mark current task as deleted
+// mark current task as deleted, this function don't return
 void task_exit() {
     task_t * tid = thiscpu_var(tid_prev);
 

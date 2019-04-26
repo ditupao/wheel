@@ -49,8 +49,8 @@ static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 
 extern u32      sched_stop  (task_t * tid, u32 state);
 extern u32      sched_cont  (task_t * tid, u32 state);
-extern task_t * task_create (process_t * pid, int priority, int cpu_idx,
-                             void * proc, void * a1, void * a2, void * a3, void * a4);
+extern task_t * task_create (int priority, int cpu_idx, void * proc,
+                             void * a1, void * a2, void * a3, void * a4);
 extern void     task_exit   ();
 extern void     task_yield  ();
 extern void     task_suspend();

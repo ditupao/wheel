@@ -22,9 +22,9 @@ void _entry() {
 
     // syscall(SYSCALL_SPAWN_THREAD, another_thread_func);
 
-    const char * argv[] = { NULL };
-    const char * envp[] = { NULL };
-    spawn_process("./setup.app", argv, envp);
+    // const char * argv[] = { NULL };
+    // const char * envp[] = { NULL };
+    // spawn_process("./setup.app", argv, envp);
 
     exit(0);
 }

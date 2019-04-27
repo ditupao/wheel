@@ -156,15 +156,12 @@ int elf64_load(process_t * pid, u8 * elf, usize len) {
         if (NULL == ranges[i]) {
             goto error;
         }
-        dbg_print("* vmrange @%llx  memsize %llx, filesize %llx. memaddr %llx.\r\n",
-                  phdr->p_vaddr, phdr->p_memsz, phdr->p_filesz, elf + phdr->p_offset);
         if (vmspace_map(&pid->vm, ranges[i])) {
             goto error;
         }
 
-        // memcpy((u8 *) phdr->p_vaddr, (u8 *) elf + phdr->p_offset, phdr->p_filesz);
-        // memset((u8 *) phdr->p_vaddr + phdr->p_filesz, 0, phdr->p_memsz - phdr->p_filesz);
-        copy_to_pglist(&ranges[i]->pages, elf + phdr->p_offset, phdr->p_filesz, phdr->p_vaddr - vm_start);
+        copy_to_pglist(&ranges[i]->pages, elf + phdr->p_offset,
+                       phdr->p_filesz, phdr->p_vaddr - vm_start);
     }
 
     pid->entry = hdr->e_entry;

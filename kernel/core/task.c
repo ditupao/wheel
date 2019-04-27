@@ -140,12 +140,7 @@ task_t * task_create(int priority, int cpu_idx, void * proc,
 
     page_array[pstk].block = 1;
     page_array[pstk].order = 4;
-    pglist_push_head(&tid->kstack, pstk);
-
-    // // put the task into process, and update resource list
-    // u32 key = irq_spin_take(&pid->lock);
-    // dl_push_tail(&pid->tasks, &tid->dl_proc);
-    // irq_spin_give(&pid->lock, key);
+    pglist_push_tail(&tid->kstack, pstk);
 
     return tid;
 }
@@ -170,8 +165,8 @@ static void task_cleanup(task_t * tid) {
         process_delete(tid->process);
     }
 
-    // TODO: signal parent for finish
-    //       and wait for parent task to release the tcb
+    // TODO: signal parent for finish and wait
+    // for the parent task to release this tcb
     pool_obj_free(&tcb_pool, tid);
 }
 

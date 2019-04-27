@@ -16,8 +16,28 @@ static void thread_entry(void * entry) {
 }
 
 // entry of the newly spawned process, new vmspace, start in kernel mode
-static void process_entry(void * entry, void * sp) {
-    dbg_print("new process, ip=%llx sp=%llx.\r\n", entry, sp);
+static void process_entry(void * entry, void * sp, const char ** kp) {
+    dbg_assert(((usize) sp % sizeof(usize)) == 0);
+    dbg_print("new process, ip=%llx sp=%llx:\r\n", entry, sp);
+
+    // const char ** argv = (const char **) sp;
+    // while (*argv) {
+    //     dbg_print("arg: %s.\r\n", *argv);
+    //     ++argv;
+    // }
+    // ++argv;
+    // while (*argv) {
+    //     dbg_print("env: %s.\r\n", *argv);
+    //     ++argv;
+    // }
+
+    for (int i = 0; kp[i]; ++i) {
+        dbg_print("kernel space argv: %s.\r\n", kp[i]);
+    }
+    for (int i = 1; kp[i]; ++i) {
+        dbg_print("kernel space envp: %s.\r\n", kp[i]);
+    }
+
     return_to_user((usize) entry, (usize) sp);
 }
 
@@ -57,9 +77,19 @@ int do_spawn_process(const char * filename,
                      const char * envp[]) {
     // filename, argv and envp are not accessible from the new vmspace
     // so we need to copy them to kernel memory first
+    // copy filename to kernel stack, copy argv and envp to user stack
 
-    // calculate total size of filename
-    int len_filename = strlen(filename);
+    // validate parameters
+    if ((NULL == filename) ||
+        (NULL == argv)     ||
+        (NULL == envp)) {
+        return 0;
+    }
+
+    // copy filename to kernel space (on stack)
+    int  len_filename = strlen(filename);
+    char bak_filename[len_filename + 1];
+    memcpy(bak_filename, filename, len_filename + 1);
 
     // calculate total size of argv[]
     int num_argv = 0;
@@ -78,17 +108,11 @@ int do_spawn_process(const char * filename,
     }
 
     // check for kernel stack overflow
-    int total = (len_filename + 1)    * sizeof(char)
-              + (num_argv     + 1)    * sizeof(char *)
-              + (num_envp     + 1)    * sizeof(char *)
-              + (len_argv + len_envp) * sizeof(char);
+    int total = ROUND_UP((len_argv + len_envp) * sizeof(char), sizeof(usize))
+              + (num_argv + num_envp + 2) * sizeof(char *);
     if (total > PAGE_SIZE) {
         return -1;
     }
-
-    // copy filename to kernel space (on stack)
-    char  bak_filename[len_filename + 1];
-    memcpy(bak_filename, filename, len_filename + 1);
 
     // copy argv[] to kernel space (on stack)
     char * bak_argv[num_argv + 1];          // includes trailing NULL
@@ -113,6 +137,13 @@ int do_spawn_process(const char * filename,
     }
     dbg_assert(off_envp == len_envp);
     bak_envp[num_envp] = NULL;
+
+    // for (int i = 0; bak_argv[i]; ++i) {
+    //     dbg_print("backed argv: %s.\r\n", bak_argv[i]);
+    // }
+    // for (int i = 0; bak_envp[i]; ++i) {
+    //     dbg_print("backed envp: %s.\r\n", bak_envp[i]);
+    // }
 
     // read file from file system
     u8  * bin_addr;
@@ -139,14 +170,50 @@ int do_spawn_process(const char * filename,
     vmrange_t * stk = vmspace_alloc(&pid->vm, 16 * PAGE_SIZE);
     vmspace_map(&pid->vm, stk);
 
-    // carve out space for argv and envp
-    // TODO: before resuming the new task, copy argv, envp to user stack
-    u8 * sp = (u8 *) (stk->addr + 16 * PAGE_SIZE - 8);
-    sp -= len_envp;
+    // put argv and envp at the beginning of user stack
+    // TODO: also support architectures where stack grows downwards
+    u8 * u_addr = (u8 *) stk->addr + 16 * PAGE_SIZE - sizeof(usize);
+    u8 * k_addr = (u8 *) phys_to_virt((usize) stk->pages.tail << PAGE_SHIFT)
+                + (PAGE_SIZE << page_array[stk->pages.tail].order) - sizeof(usize);
+    u_addr -= total;
+    k_addr -= total;
+    u8 * sp = u_addr;
+
+    // space for argv pointer array
+    // const char ** u_argv = (const char **) u_addr;
+    const char ** k_argv = (const char **) k_addr;
+    u_addr += (num_argv + 1) * sizeof(const char *);
+    k_addr += (num_argv + 1) * sizeof(const char *);
+
+    // space for envp pointer array
+    // const char ** u_envp = (const char **) u_addr;
+    const char ** k_envp = (const char **) k_addr;
+    u_addr += (num_envp + 1) * sizeof(const char *);
+    k_addr += (num_argv + 1) * sizeof(const char *);
+
+    // fill argv array and copy string
+    memcpy(k_addr, buf_argv, len_argv);
+    for (int i = 0; i < num_argv; ++i) {
+        dbg_print("copying argv %s.\r\n", k_addr);
+        k_argv[i] = (const char *) u_addr;
+        u_addr += strlen((const char *) k_addr) + 1;
+        k_addr += strlen((const char *) k_addr) + 1;
+    }
+    k_argv[num_argv] = NULL;
+
+    // fill envp array and copy string
+    memcpy(k_addr, buf_envp, len_envp);
+    for (int i = 0; i < num_envp; ++i) {
+        dbg_print("copying envp %s.\r\n", k_addr);
+        k_envp[i] = (const char *) u_addr;
+        u_addr += strlen((const char *) k_addr) + 1;
+        k_addr += strlen((const char *) k_addr) + 1;
+    }
+    k_envp[num_argv] = NULL;
 
     // create new task, put it under the newly created process
     task_t * tid = task_create(PRIORITY_NONRT, 0, process_entry,
-                               (void *) pid->entry, (void *) sp, 0,0);
+                               (void *) pid->entry, (void *) sp, k_argv, 0);
     dl_push_tail(&pid->tasks, &tid->dl_proc);
     regs_ctx_set(&tid->regs, pid->vm.ctx);
     tid->process = pid;

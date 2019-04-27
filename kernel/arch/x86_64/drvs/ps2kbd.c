@@ -62,8 +62,8 @@ typedef enum keycode {
     // multimedia www
     KEY_WWW_HOME,   KEY_WWW_SEARCH, KEY_WWW_FAVORITES,
     KEY_WWW_FORWARD,KEY_WWW_BACK,   KEY_WWW_STOP,   KEY_WWW_REFRESH,
-    
-    // GUI
+
+    // GUI (windows key)
     KEY_GUI_LEFT,   KEY_GUI_RIGHT,
 
     // acpi
@@ -339,6 +339,7 @@ static void digest_scan_code(u8 scancode) {
         case 0x6c:  send_keycode(KEY_MM_EMAIL,      scancode & 0x80);   break;
         case 0x6d:  send_keycode(KEY_MM_SELECT,     scancode & 0x80);   break;
         }
+        state = STATE_NORMAL;
         break;
     case STATE_PRTSC_DOWN_2:
         if (0xe0 == scancode) {
@@ -400,13 +401,14 @@ static void digest_scan_code(u8 scancode) {
         }
         state = STATE_NORMAL;
         break;
+    default:
+        break;
     }
 }
 
 static void ps2kbd_int_handler(int vec __UNUSED, int_frame_t * sp __UNUSED) {
-    if (in8(PS2KBD_CTRL_PORT) & 1) {
+    while (in8(PS2KBD_CTRL_PORT) & 1) {
         u8 scancode = in8(PS2KBD_DATA_PORT);
-        // send_ascii('`%02x`", scancod');
         digest_scan_code(scancode);
     }
     loapic_send_eoi();

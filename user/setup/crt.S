@@ -3,6 +3,7 @@
 .global syscall
 .global _start
 
+.extern entry
 .extern main
 
 .text
@@ -48,14 +49,13 @@ name:;                                  \
 
 // this is the real entry of user program
 _start:
+    movq    %rsp, %rdi          // points to argv[0]
+
     pushq   $0                  // dummy return code
     pushq   $0                  // dummy rbp value
     movq    %rsp, %rbp
 
-    xorq    %rdi, %rdi          // argc
-    xorq    %rsi, %rsi          // argv
-    xorq    %rdx, %rdx          // env
-    call    main
+    call    entry
 
     movl    %eax, %edi          // return value of main()
     call    exit                // should never return

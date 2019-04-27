@@ -272,40 +272,16 @@ static void root_proc() {
     kbd_lib_init();
     ps2kbd_dev_init();
 
-    const char * argv[] = { NULL };
-    const char * envp[] = { NULL };
-    do_spawn_process("./hello.app", argv, envp);
-
-#if 0
-    // TODO: use `do_spawn_process` to run init process
-
-    // print the content of tar file
-    tar_dump(&_ramfs_addr);
-
-    // extract executable file from tar
-    u8  * bin_addr;
-    usize bin_size;
-    tar_find(&_ramfs_addr, "./hello.app", &bin_addr, &bin_size);
-
-    task_t    * tid = thiscpu_var(tid_prev);
-    process_t * pid = tid->process;
-
-    if ((NULL == bin_addr) && (0 == bin_size)) {
-        dbg_print("hello.app not found!\r\n");
-    } else if (OK == elf64_load(pid, bin_addr, bin_size)) {
-        // allocate pages for user-mode stack
-        vmspace_t * vm  = &pid->vm;
-        vmrange_t * stk = vmspace_alloc(vm, 16 * PAGE_SIZE);
-        vmspace_map(vm, stk);
-
-        dbg_assert(NULL == tid->ustack);
-        tid->ustack = stk;
-
-        return_to_user(pid->entry, stk->addr + 16 * PAGE_SIZE);
-    } else {
-        dbg_print("elf file parsing error, cannot execute!\r\n");
-    }
-#endif
+    const char * argv[] = {
+        "./setup.app",
+        NULL
+    };
+    const char * envp[] = {
+        "SYSTEM=wheel",
+        "HOST=x86_64",
+        NULL
+    };
+    do_spawn_process(argv[0], argv, envp);
 
     while (1) {}
 }

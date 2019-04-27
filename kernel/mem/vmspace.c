@@ -292,14 +292,13 @@ int vmspace_map(vmspace_t * space, vmrange_t * range) {
 
         page_array[p].block = 1;
         page_array[p].order = 0;
-        pglist_push_head(&range->pages, p);
+        pglist_push_tail(&range->pages, p);
 
         usize va = range->addr + PAGE_SIZE * i;
         usize pa = (usize) p << PAGE_SHIFT;
         mmu_map(space->ctx, va, pa, 1, 0);
     }
 
-    dbg_print("= mapping [%llx, %llx).\r\n", range->addr, range->addr + range->size);
     irq_spin_give(&space->lock, key);
     return OK;
 }

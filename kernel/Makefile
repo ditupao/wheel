@@ -12,6 +12,7 @@ SUBDIRS :=  arch/$(ARCH) core mem libk
 SRCLIST :=  $(foreach d,$(SUBDIRS),$(shell find $(d) -type f -name '*.S' -o -name '*.c'))
 OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
+APPLIST :=  $(shell find $(APPDIR) -type f -name '*.app')
 
 CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -ffreestanding -Wall -Wextra
 CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration -Wno-cast-function-type
@@ -37,8 +38,8 @@ $(RAMFILE): $(TARFILE)
 	@ echo "[K:CP] $@"
 	@ $(OBJCOPY) --input binary --output elf64-x86-64 --binary-architecture=i386 --rename-section .data=.binary $< $@
 
-$(TARFILE):
-	@ tar -cf $@ -C $(APPDIR) .
+$(TARFILE): $(APPLIST)
+	@ tar -cf $@ -C $(APPDIR) $(patsubst $(APPDIR)/%,%,$^)
 
 $(ELFFILE): $(OBJLIST) $(RAMFILE)
 	@ echo "[K:LD] $@"

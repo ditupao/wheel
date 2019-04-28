@@ -4,9 +4,11 @@
 # - APPDIR, the place to put executable files
 # - ACTION, build or clean
 
-SUBDIRS :=  $(patsubst %/,%,$(dir $(wildcard */Makefile)))
 
-all: $(SUBDIRS)
+all: libs apps
 
-$(SUBDIRS)::
-	@ $(MAKE) -C $@ ARCH=$(ARCH) APPDIR=$(APPDIR) OUTDIR=$(OUTDIR)/$@ $(ACTION)
+libs:
+	@ $(MAKE) -C libs
+
+apps:
+	@ $(MAKE) -C apps

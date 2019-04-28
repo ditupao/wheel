@@ -302,20 +302,19 @@ _no_task_switch:
     popfq
     ret
 
-// TODO: use sysret instead of iret to jump to user mode
+// build temporary SS/RSP/RFLAGS/CS/RIP structure on kernel stack
+// rdi - rip value when switch to user mode
+// rsi - rsp value when switch to user mode
 return_to_user:
-    swapgs
-    movq    %rsi, %rsp  // switch to user stack
     pushfq
     cli
-    popq    %rax
-    subq    $8, %rsi
-    pushq   $0          // no return address
+    popq    %rax        // rflags before cli
     pushq   $0x23       // ss
     pushq   %rsi        // rsp
     pushq   %rax        // rflags
     pushq   $0x2b       // cs
     pushq   %rdi        // rip
+    swapgs
     iretq
 
 //------------------------------------------------------------------------------

@@ -272,8 +272,13 @@ static void root_proc() {
     kbd_lib_init();
     ps2kbd_dev_init();
 
+    dbg_print("content of ramfs.tar:\r\n");
+    tar_dump(&_ramfs_addr);
+
     const char * argv[] = {
-        "./setup.app",
+        "setup.app",
+        "hello",
+        "world",
         NULL
     };
     const char * envp[] = {

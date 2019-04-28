@@ -198,8 +198,3 @@ error:
     }
     return ERROR;
 }
-
-// __INIT void load_lib_init() {
-//     pool_init(&obj_pool, sizeof(vmobject_t));
-//     pool_init(&seg_pool, sizeof(vmsegment_t));
-// }

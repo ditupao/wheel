@@ -11,10 +11,13 @@ APPFILE ?=  $(APPDIR)/$(NAME).app
 MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
 # TODO: different for each arch?
-CFLAGS  :=  -c -g -std=c99 -I . -ffreestanding -fPIC
+CFLAGS  :=  -c -g -std=c99 -I ../h -ffreestanding -fPIC
 CFLAGS  +=  -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-fma
 CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
-LFLAGS  :=  -nostdlib -lgcc -Ttext=0x100000
+
+LFLAGS  :=  -nostdlib -L $(OUTDIR)/.. -lc -lgcc -Ttext=0x100000
+
+include ../arch/$(ARCH)/config.mk
 
 build: $(APPFILE)
 
@@ -22,10 +25,10 @@ clean:
 	@ rm -f $(OBJLIST)
 	@ rm -f $(APPFILE)
 
-$(APPFILE): $(OBJLIST)
+$(APPFILE): $(OBJLIST) $(LIBC)
 	@ echo "[LD:U] $@"
 	@ mkdir -p $(@D) > /dev/null
-	@ $(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) -o $@ $^
+	$(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
 
 $(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
 	@ echo "[AS:U] $@"

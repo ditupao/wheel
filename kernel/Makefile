@@ -53,12 +53,14 @@ $(SYMFILE): $(ELFFILE)
 	@ echo "[K:CP] $@"
 	@ $(OBJCOPY) --only-keep-debug $< $@
 
-$(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
+# $(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
+$(OUTDIR)/%.S.o: %.S
 	@ echo "[K:AS] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
-$(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
+# $(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
+$(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
 	@ echo "[K:CC] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) $(DEPGEN) -o $@ $<

@@ -10,14 +10,9 @@ OBJLIST ?=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 APPFILE ?=  $(APPDIR)/$(NAME).app
 MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
-# TODO: different for each arch?
-CFLAGS  :=  -c -g -std=c99 -I ../h -ffreestanding -fPIC
-CFLAGS  +=  -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mno-3dnow -mno-fma
+CFLAGS  :=  -c -g -std=c99 -I ../../h -ffreestanding
 CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
-
-LFLAGS  :=  -nostdlib -L $(OUTDIR)/.. -lc -lgcc -Ttext=0x100000
-
-include ../arch/$(ARCH)/config.mk
+LFLAGS  :=  -nostdlib -L $(APPDIR) -lc -lgcc
 
 build: $(APPFILE)
 
@@ -30,12 +25,14 @@ $(APPFILE): $(OBJLIST) $(LIBC)
 	@ mkdir -p $(@D) > /dev/null
 	$(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
 
-$(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
+# $(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
+$(OUTDIR)/%.S.o: %.S
 	@ echo "[AS:U] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
-$(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c
+# $(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c
+$(OUTDIR)/%.c.o: %.c
 	@ echo "[CC:U] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<

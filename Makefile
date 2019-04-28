@@ -7,15 +7,22 @@ TGTARCH :=  x86_64
 BINFILE :=  $(OUTDIR)/kernel/wheel.bin  # must be same with kernel/Makefile
 ISOFILE :=  $(OUTDIR)/wheel.iso
 
+CC      :=  $(TGTARCH)-elf-gcc
+AR      :=  $(TGTARCH)-elf-ar
+OBJCOPY :=  $(TGTARCH)-elf-objcopy
+
+PARAMS  :=  ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps \
+            CC=$(CC) AR=$(AR) OBJCOPY=$(OBJCOPY)
+
 build:
 	@ echo "building the wheel operating system"
-	@ $(MAKE) -C user   ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   ACTION=build
-	@ $(MAKE) -C kernel ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel        build
+	@ $(MAKE) -C user   $(PARAMS) OUTDIR=$(OUTDIR)/user   build
+	@ $(MAKE) -C kernel $(PARAMS) OUTDIR=$(OUTDIR)/kernel build
 
 clean:
 	@ echo "cleaning the wheel operating system"
-	@ $(MAKE) -C user   ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   ACTION=clean
-	@ $(MAKE) -C kernel ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel        clean
+	@ $(MAKE) -C user   $(PARAMS) OUTDIR=$(OUTDIR)/user   clean
+	@ $(MAKE) -C kernel $(PARAMS) OUTDIR=$(OUTDIR)/kernel clean
 	@ rm -rf $(ISOFILE)
 
 iso: build

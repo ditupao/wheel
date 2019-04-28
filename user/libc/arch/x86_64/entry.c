@@ -1,5 +1,3 @@
-#include <syscall.h>
-
 extern int main(int argc, const char * argv[], const char * envp[]);
 
 int entry(const char ** sp) {

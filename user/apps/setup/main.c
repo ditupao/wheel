@@ -1,13 +1,4 @@
-#include <stddef.h>
-#include <stdint.h>
-#include <syscall.h>
-
-// // generate syscall wrapper function prototypes
-// #define DEFINE_SYSCALL(id, name, ...) extern int __ ## name (__VA_ARGS__);
-// #include SYSCALL_DEF
-// #undef DEFINE_SYSCALL
-
-extern int syscall(int func, ...);
+#include <wheel.h>
 
 int main(int argc, const char * argv[], const char * envp[]) {
     for (int i = 0; i < argc; ++i) {

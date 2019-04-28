@@ -1,14 +1,16 @@
 # arguments to this file:
 # - ARCH
-# - OUTDIR, the place to put object files
 # - APPDIR, the place to put executable files
+# - OUTDIR, the place to put object files
 # - ACTION, build or clean
 
+PARAMS  :=  ARCH=$(ARCH) APPDIR=$(APPDIR) \
+            CC=$(CC) AR=$(AR) OBJCOPY=$(OBJCOPY)
 
-all: libs apps
+build:
+	@ $(MAKE) -C libc $(PARAMS) OUTDIR=$(OUTDIR)/libc        build
+	@ $(MAKE) -C apps $(PARAMS) OUTDIR=$(OUTDIR)/apps ACTION=build
 
-libs:
-	@ $(MAKE) -C libs
-
-apps:
-	@ $(MAKE) -C apps
+clean:
+	@ $(MAKE) -C libc $(PARAMS) OUTDIR=$(OUTDIR)/libc        clean
+	@ $(MAKE) -C apps $(PARAMS) OUTDIR=$(OUTDIR)/apps ACTION=clean

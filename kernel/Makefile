@@ -8,7 +8,7 @@ BINFILE :=  $(OUTDIR)/wheel.bin
 MAPFILE :=  $(OUTDIR)/wheel.map
 SYMFILE :=  $(OUTDIR)/wheel.sym
 
-SUBDIRS :=  arch/$(ARCH) core mem libk
+SUBDIRS :=  arch/$(ARCH) core mem drvs libk
 SRCLIST :=  $(foreach d,$(SUBDIRS),$(shell find $(d) -type f -name '*.S' -o -name '*.c'))
 OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))

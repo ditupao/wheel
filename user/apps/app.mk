@@ -23,7 +23,7 @@ clean:
 $(APPFILE): $(OBJLIST) $(LIBC)
 	@ echo "[LD:U] $@"
 	@ mkdir -p $(@D) > /dev/null
-	$(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
+	@ $(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
 
 # $(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
 $(OUTDIR)/%.S.o: %.S

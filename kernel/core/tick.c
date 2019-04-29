@@ -97,11 +97,11 @@ void tick_advance() {
 
     // round robin (not only for non-rt tasks)
     task_t * tid = thiscpu_var(tid_prev);
-    --tid->remaining;
-    // dbg_print("-%ds", tid->remaining);
-    if (tid->remaining <= 0) {
-        tid->remaining = tid->timeslice;
-        task_yield();
+    if (PRIORITY_IDLE != tid->priority) {
+        if (--tid->remaining <= 0) {
+            tid->remaining = tid->timeslice;
+            task_yield();
+        }
     }
 }
 

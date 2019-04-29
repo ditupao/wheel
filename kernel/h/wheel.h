@@ -18,6 +18,9 @@
 #include <mem/pool.h>
 #include <mem/vmspace.h>
 
+#include <drvs/kbd.h>
+#include <drvs/tty.h>
+
 #include <libk/ctype.h>
 #include <libk/string.h>
 #include <libk/vsprintf.h>

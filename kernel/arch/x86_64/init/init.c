@@ -108,9 +108,8 @@ static __INIT void parse_mmap(u8 * mmap_base, u32 mmap_size) {
 static __INITDATA mb_info_t mbi;
 
 // init process, root task and idle tasks
-// static            process_t * init_pid;
-static __INITDATA task_t    * root_tid;
-static __PERCPU   task_t    * idle_tid;
+static __INITDATA task_t * root_tid;
+static __PERCPU   task_t * idle_tid;
 
 // forward declarations
 static void root_proc();
@@ -248,8 +247,6 @@ __INIT __NORETURN void sys_init(u32 eax, u32 ebx) {
 //------------------------------------------------------------------------------
 // post-kernel initialization
 
-extern __INIT void kbd_lib_init();
-
 static void root_proc() {
     // copy trampoline code
     u8 * src = (u8 *) &_trampoline_addr;
@@ -269,8 +266,9 @@ static void root_proc() {
     }
 
     // initialize device driver(s)
-    kbd_lib_init();
-    ps2kbd_dev_init();
+    kbd_lib_init();     // drvs
+    tty_lib_init();     // drvs
+    ps2kbd_dev_init();  // arch-drvs
 
     dbg_print("content of ramfs.tar:\r\n");
     tar_dump(&_ramfs_addr);

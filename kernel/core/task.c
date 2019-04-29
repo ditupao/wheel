@@ -58,6 +58,8 @@ u32 sched_stop(task_t * tid, u32 state) {
     return old_state;
 }
 
+static int task_counter = 0;
+
 // remove bits from `tid->state`, possibly resuming the task.
 // return previous task state.
 // this function only updates `tid`, `ready_q`, and `tid_next` only,
@@ -71,8 +73,15 @@ u32 sched_cont(task_t * tid, u32 state) {
     }
 
     // lock ready queue
-    int         cpu = tid->cpu_idx;
-    int         pri = tid->priority;
+    int pri = tid->priority;
+    int cpu = tid->cpu_idx;
+    if (PRIORITY_NONRT == pri) {
+        // TODO: just a work-around for leveraging SMP power
+        // migrate to another cpu
+        cpu = ++task_counter % cpu_activated;
+        tid->cpu_idx = cpu;
+    }
+
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 

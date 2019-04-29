@@ -11,11 +11,15 @@ pipe_t * pipe_create() {
     semaphore_init(&pipe->sem, 1, 0);   // initial state is empty
 
     pfn_t pn = page_block_alloc(ZONE_NORMAL|ZONE_DMA, 0);
-    pglist_push_tail(&pipe->pages, pn);
+    if (NO_PAGE == pn) {
+        pool_obj_free(&pipe_pool, pipe);
+        return NULL;
+    }
+
     page_array[pn].block = 1;
     page_array[pn].order = 0;
     page_array[pn].type  = PT_PIPE;
-
+    pglist_push_tail(&pipe->pages, pn);
     return pipe;
 }
 
@@ -24,6 +28,7 @@ void pipe_delete(pipe_t * pipe) {
     pool_obj_free(&pipe_pool, pipe);
 }
 
+// return how many bytes read
 usize pipe_read(pipe_t * pipe, u8 * buf, usize len) {
     usize backup_len = len;
 
@@ -45,7 +50,7 @@ usize pipe_read(pipe_t * pipe, u8 * buf, usize len) {
             buf               += copy;
             len               -= copy;
 
-            // we've come to the end
+            // there's nothing more to read
             return backup_len - len;
         }
 

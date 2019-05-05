@@ -12,4 +12,5 @@ extern __WEAK int    memcmp (const void * buf1, const void * buf2, usize n);
 extern __WEAK void * memcpy (void * dst, const void * src, usize n);
 extern __WEAK void * memmove(void * dst, const void * src, usize n);
 extern __WEAK void * memset (void * buf, u8 x, usize n);
+
 #endif // LIBK_STRING_H

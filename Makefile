@@ -1,28 +1,26 @@
 # top level makefile for wheel operating system
 
+ARCH    :=  x86_64
+CC      :=  $(ARCH)-elf-gcc
+AR      :=  $(ARCH)-elf-ar
+OBJCOPY :=  $(ARCH)-elf-objcopy
+TOOLS   :=  ARCH=$(ARCH) CC=$(CC) AR=$(AR) OBJCOPY=$(OBJCOPY)
+
 OUTDIR  :=  $(CURDIR)/bin
 ISODIR  :=  $(OUTDIR)/iso
 
-TGTARCH :=  x86_64
 BINFILE :=  $(OUTDIR)/kernel/wheel.bin  # must be same with kernel/Makefile
 ISOFILE :=  $(OUTDIR)/wheel.iso
 
-CC      :=  $(TGTARCH)-elf-gcc
-AR      :=  $(TGTARCH)-elf-ar
-OBJCOPY :=  $(TGTARCH)-elf-objcopy
-
-PARAMS  :=  ARCH=$(TGTARCH) APPDIR=$(OUTDIR)/apps \
-            CC=$(CC) AR=$(AR) OBJCOPY=$(OBJCOPY)
-
 build:
 	@ echo "building the wheel operating system"
-	@ $(MAKE) -C user   $(PARAMS) OUTDIR=$(OUTDIR)/user   build
-	@ $(MAKE) -C kernel $(PARAMS) OUTDIR=$(OUTDIR)/kernel build
+	@ $(MAKE) -C user   $(TOOLS) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   build
+	@ $(MAKE) -C kernel $(TOOLS) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel build
 
 clean:
 	@ echo "cleaning the wheel operating system"
-	@ $(MAKE) -C user   $(PARAMS) OUTDIR=$(OUTDIR)/user   clean
-	@ $(MAKE) -C kernel $(PARAMS) OUTDIR=$(OUTDIR)/kernel clean
+	@ $(MAKE) -C user   $(TOOLS) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/user   clean
+	@ $(MAKE) -C kernel $(TOOLS) APPDIR=$(OUTDIR)/apps OUTDIR=$(OUTDIR)/kernel clean
 	@ rm -rf $(ISOFILE)
 
 iso: build

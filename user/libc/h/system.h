@@ -1,5 +1,9 @@
-#ifndef WHEEL_H
-#define WHEEL_H
+#ifndef LIBC_SYSTEM_H
+#define LIBC_SYSTEM_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // this is the top-level header of userland
 // not be confused with kernel `wheel.h`
@@ -11,4 +15,8 @@
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL
 
-#endif // WHEEL_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // LIBC_SYSTEM_H

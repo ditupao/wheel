@@ -1,4 +1,4 @@
-#include <asm.h>
+#include <linkage.h>
 
 #define MB_MAGIC    0x1badb002
 #define MB_FLAGS    1<<0 | 1<<1
@@ -28,7 +28,7 @@ mb_header:
 
 .balign 8, 0
 sys_boot:
-// disable interrupts and save GRUB parameters
+    // disable interrupts and save GRUB parameters
     cli
     movl    %eax, (mb_eax)
     movl    %ebx, (mb_ebx)

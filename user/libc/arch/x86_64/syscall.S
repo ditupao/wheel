@@ -3,7 +3,7 @@
 .text
 .code64
 
-stub_syscall:
+syscall_stub:
     pushq   %rbx
     pushq   %r10
     pushq   %r11
@@ -19,6 +19,6 @@ stub_syscall:
 .type name,@function;                   \
 name:;                                  \
     movl    $ id, %eax;                 \
-    jmp     stub_syscall
+    jmp     syscall_stub
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL

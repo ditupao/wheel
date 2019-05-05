@@ -1,5 +1,5 @@
-#ifndef ASM_H
-#define ASM_H
+#ifndef LINKAGE_H
+#define LINKAGE_H
 
 #define GLOBAL_FUNC(sym)        \
     .global sym;                \
@@ -17,4 +17,4 @@
     .extern sym;                \
     .type   sym, @object
 
-#endif // ASM_H
+#endif // LINKAGE_H

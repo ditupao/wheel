@@ -10,8 +10,8 @@ OBJLIST ?=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 APPFILE ?=  $(APPDIR)/$(NAME).app
 MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
-CFLAGS  :=  -c -g -std=c99 -I ../../h -ffreestanding
-CFLAGS  +=  -DSYSCALL_DEF='<../../common/syscall.def>'
+CFLAGS  :=  -c -g -std=c99 -I../../libc/h -I../../../common -ffreestanding
+CFLAGS  +=  -DSYSCALL_DEF='<syscall.def>'
 LFLAGS  :=  -nostdlib -L $(APPDIR) -lc -lgcc
 
 build: $(APPFILE)
@@ -25,13 +25,11 @@ $(APPFILE): $(OBJLIST) $(LIBC)
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
 
-# $(filter %.S.o, $(OBJLIST)): $(OUTDIR)/%.S.o: %.S
 $(OUTDIR)/%.S.o: %.S
 	@ echo "[AS:U] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
-# $(filter %.c.o, $(OBJLIST)): $(OUTDIR)/%.c.o: %.c
 $(OUTDIR)/%.c.o: %.c
 	@ echo "[CC:U] $@"
 	@ mkdir -p $(@D) > /dev/null

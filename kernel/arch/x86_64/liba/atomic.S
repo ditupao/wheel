@@ -1,4 +1,4 @@
-#include <asm.h>
+#include <linkage.h>
 
 GLOBAL_FUNC(atomic32_set)
 GLOBAL_FUNC(atomic32_inc)

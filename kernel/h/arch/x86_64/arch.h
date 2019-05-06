@@ -27,18 +27,18 @@
 #define NORMAL_START    0x0000000001000000UL    // 16MB
 #define NORMAL_END      0xffffffffffffffffUL    // +inf
 
-// #include "multiboot.h"
+#include "multiboot.h"
 
-#include "liba/cpu.h"
-// #include "liba/acpi.h"
-// #include "liba/debug.h"
+#include "liba/debug.h"
 #include "liba/atomic.h"
-// #include "liba/loapic.h"
-// #include "liba/ioapic.h"
-// #include "liba/mmu.h"
+#include "liba/cpu.h"
+#include "liba/mmu.h"
+#include "liba/acpi.h"
+#include "liba/loapic.h"
+#include "liba/ioapic.h"
 
-// #include "drvs/serial.h"
+#include "drvs/serial.h"
 #include "drvs/console.h"
-// #include "drvs/ps2kbd.h"
+#include "drvs/ps2kbd.h"
 
 #endif // ARCH_X86_64_ARCH_H

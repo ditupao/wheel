@@ -180,5 +180,5 @@ index = 0
 
 .balign 0x1000
 boot_stack:
-    .skip   0x10000
+    .skip   0x10000                     // reserve 64K for boot stack
 boot_stack_top:

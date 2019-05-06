@@ -8,13 +8,13 @@ BINFILE :=  $(OUTDIR)/wheel.bin
 MAPFILE :=  $(OUTDIR)/wheel.map
 SYMFILE :=  $(OUTDIR)/wheel.sym
 
-SUBDIRS :=  arch/$(ARCH) libk
+SUBDIRS :=  arch/$(ARCH) core mem drvs libk
 SRCLIST :=  $(foreach d,$(SUBDIRS),$(shell find $(d) -type f -name '*.S' -o -name '*.c'))
 OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
 APPLIST :=  $(shell find $(APPDIR) -type f -name '*.app')
 
-CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -I../../common -ffreestanding -Wall -Wextra
+CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -I../common -ffreestanding -Wall -Wextra
 CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration -Wno-cast-function-type
 CFLAGS  +=  -DSYSCALL_DEF='<syscall.def>'
 DEPGEN   =  -MT $@ -MMD -MP -MF $(basename $@).t

@@ -21,16 +21,16 @@ clean:
 	@ rm -f $(APPFILE)
 
 $(APPFILE): $(OBJLIST) $(LIBC)
-	@ echo "[LD:U] $@"
+	@ echo "[U:LD] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(LFLAGS) -Wl,-Map,$(MAPFILE) $^ -o $@
 
 $(OUTDIR)/%.S.o: %.S
-	@ echo "[AS:U] $@"
+	@ echo "[U:AS] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
 $(OUTDIR)/%.c.o: %.c
-	@ echo "[CC:U] $@"
+	@ echo "[U:CC] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<

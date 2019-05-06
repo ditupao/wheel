@@ -20,17 +20,17 @@ clean:
 	@ rm -f $(LIBFILE)
 
 $(LIBFILE): $(OBJLIST)
-	@ echo "[AR:U] $@"
+	@ echo "[U:AR] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(AR) rcs -o $@ $^
 
 $(OUTDIR)/%.S.o: %.S
-	@ echo "[AS:U] $@"
+	@ echo "[U:AS] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) -o $@ $<
 
 $(OUTDIR)/%.c.o: %.c $(OUTDIR)/%.c.d
-	@ echo "[CC:U] $@"
+	@ echo "[U:CC] $@"
 	@ mkdir -p $(@D) > /dev/null
 	@ $(CC) $(CFLAGS) $(DEPGEN) -o $@ $<
 	@ mv -f $(basename $@).t $(basename $@).d

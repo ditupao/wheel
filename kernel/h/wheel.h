@@ -23,9 +23,11 @@
 #include <libk/ctype.h>
 #include <libk/string.h>
 #include <libk/vsprintf.h>
-#include <libk/spin.h>
+
 #include <libk/list.h>
-// #include <libk/rbtree.h>
+#include <libk/rbtree.h>
+
+#include <libk/spin.h>
 #include <libk/elf64.h>
 #include <libk/tar.h>
 

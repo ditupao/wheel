@@ -15,11 +15,12 @@ typedef struct task {
     regs_t      regs;           // arch-specific status
     spin_t      lock;           // spinlock used in state-switching
     u32         state;          // task state
-    int         ret_val;        // return code from PEND state
     int         priority;       // must < PRIORITY_COUNT, could use shorter type
+    cpuset_t    affinity;       // bit mask of allowed cpu
     int         cpu_idx;        // must < cpu_installed, could use shorter type
     int         timeslice;      // total timeslice
     int         remaining;      // remaining timeslice
+    int         ret_val;        // return code from PEND state
     pglist_t    kstack;         // kernel stack page list
     vmrange_t * ustack;         // user stack region
     dlnode_t    dl_sched;       // node in ready_q/pend_q

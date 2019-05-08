@@ -6,8 +6,14 @@
 typedef struct ready_q {
     spin_t   lock;
     u32      priorities;
-    dllist_t q[PRIORITY_COUNT];
+    dllist_t tasks    [PRIORITY_COUNT];
+    int      timeslice[PRIORITY_COUNT]; // sum of timeslices of each task
 } ready_q_t;
+
+// we use sum of timeslice to measure cpu load
+static spin_t timeslice_lock;
+static int    timeslice_min[PRIORITY_COUNT];
+static int    timeslice_cpu[PRIORITY_COUNT];
 
 __PERCPU task_t  * tid_prev;
 __PERCPU task_t  * tid_next;     // also protected by ready_q.lock
@@ -39,9 +45,17 @@ u32 sched_stop(task_t * tid, u32 state) {
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
+    raw_spin_take(&timeslice_lock);
+    rdy->timeslice[pri] -= tid->timeslice;
+    if (rdy->timeslice[pri] < timeslice_min[pri]) {
+        timeslice_min[pri] = rdy->timeslice[pri];
+        timeslice_cpu[pri] = cpu;
+    }
+    raw_spin_give(&timeslice_lock);
+
     // remove task from ready queue
-    dl_remove(&rdy->q[pri], &tid->dl_sched);
-    if ((NULL == rdy->q[pri].head) && (NULL == rdy->q[pri].tail)) {
+    dl_remove(&rdy->tasks[pri], &tid->dl_sched);
+    if ((NULL == rdy->tasks[pri].head) && (NULL == rdy->tasks[pri].tail)) {
         rdy->priorities &= ~(1U << pri);
     }
 
@@ -49,7 +63,7 @@ u32 sched_stop(task_t * tid, u32 state) {
     if (tid == percpu_var(cpu, tid_next)) {
         dbg_assert(0 != rdy->priorities);
         u32 pri = CTZ32(rdy->priorities);
-        task_t * cand = PARENT(rdy->q[pri].head, task_t, dl_sched);
+        task_t * cand = PARENT(rdy->tasks[pri].head, task_t, dl_sched);
         percpu_var(cpu, tid_next) = cand;
     }
 
@@ -57,8 +71,6 @@ u32 sched_stop(task_t * tid, u32 state) {
     raw_spin_give(&rdy->lock);
     return old_state;
 }
-
-static int task_counter = 0;
 
 // remove bits from `tid->state`, possibly resuming the task.
 // return previous task state.
@@ -72,22 +84,48 @@ u32 sched_cont(task_t * tid, u32 state) {
         return old_state;
     }
 
-    // lock ready queue
     int pri = tid->priority;
-    int cpu = tid->cpu_idx;
-    if (PRIORITY_NONRT == pri) {
-        // TODO: just a work-around for leveraging SMP power
-        // migrate to another cpu
-        cpu = ++task_counter % cpu_activated;
-        tid->cpu_idx = cpu;
+    int cpu = tid->cpu_idx;     // last cpu
+
+    // pick a new cpu based on load
+    // if the difference of load is not so significant
+    // then still execute on the old cpu
+    cpuset_t aff  = tid->affinity;
+    int      cand = 0;
+    int      load = 0x7fffffff;
+    if (NO_CPU == aff) {
+        raw_spin_take(&timeslice_lock);
+        load = timeslice_min[pri];
+        cand = timeslice_cpu[pri];
+        raw_spin_give(&timeslice_lock);
+    } else {
+        while (aff) {
+            cpuset_t    next = aff & (aff - 1);
+            int         idx  = CTZ64(aff ^ next);
+            ready_q_t * rdy  = percpu_ptr(idx, ready_q);
+            raw_spin_take(&rdy->lock);
+            if (rdy->timeslice[pri] < load) {
+                load = rdy->timeslice[pri];
+                cand = idx;
+            }
+            raw_spin_give(&rdy->lock);
+            aff = next;
+        }
     }
 
+    if (cand != cpu) {
+        // TODO: if load difference is not so significant
+        //       then we'll still use the old cpu
+        cpu = cand;
+    }
+
+    // lock ready queue
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
     // put task back into ready queue
     rdy->priorities |= 1U << pri;
-    tid->queue = &rdy->q[pri];
+    tid->queue = &rdy->tasks[pri];
     dl_push_tail(tid->queue, &tid->dl_sched);
 
     // check whether we can preempt
@@ -137,7 +175,8 @@ task_t * task_create(int priority, int cpu_idx, void * proc,
     tid->state     = TS_SUSPEND;
     tid->ret_val   = 0;
     tid->priority  = priority;
-    tid->cpu_idx   = cpu_idx;
+    tid->affinity  = NO_CPU;
+    tid->cpu_idx   = 0;
     tid->timeslice = 200;   // TODO: put default timeslice in config
     tid->remaining = 200;
     tid->kstack    = PGLIST_INIT;
@@ -206,7 +245,7 @@ void task_yield() {
 
     dbg_assert(0 != rdy->priorities);
     u32 pri = CTZ32(rdy->priorities);
-    task_t * cand = PARENT(rdy->q[pri].head, task_t, dl_sched);
+    task_t * cand = PARENT(rdy->tasks[pri].head, task_t, dl_sched);
     thiscpu_var(tid_next) = cand;
 
     // dbg_print("<%p->%p>", tid, cand);
@@ -284,16 +323,22 @@ void task_wakeup(task_t * tid) {
 
 __INIT void task_lib_init() {
     for (int i = 0; i < cpu_installed; ++i) {
-        percpu_var(i, tid_prev) = NULL;
-        percpu_var(i, tid_prev) = NULL;
+        percpu_var(i, tid_prev)   = NULL;
+        percpu_var(i, tid_prev)   = NULL;
         percpu_var(i, no_preempt) = 0;
 
         ready_q_t * rdy = percpu_ptr(i, ready_q);
-        rdy->lock = SPIN_INIT;
+        rdy->lock       = SPIN_INIT;
         rdy->priorities = 0;
         for (int p = 0; p < PRIORITY_COUNT; ++p) {
-            rdy->q[p] = DLLIST_INIT;
+            rdy->tasks    [p] = DLLIST_INIT;
+            rdy->timeslice[p] = 0;
         }
+    }
+
+    for (int p = 0; p < PRIORITY_COUNT; ++p) {
+        timeslice_min[p] = 0;
+        timeslice_cpu[p] = 0;
     }
 
     pool_init(&tcb_pool, sizeof(task_t));

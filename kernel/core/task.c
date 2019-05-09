@@ -1,22 +1,23 @@
 #include <wheel.h>
 
-// `tid_next` is actually the head of ready queue, so it's also
-// under the protection of `ready_q.lock`.
 
+// we use the sum of timeslice to measure cpu load
+static spin_t load_lock [PRIORITY_COUNT];
+static int    least_load[PRIORITY_COUNT];
+static int    least_cpu [PRIORITY_COUNT];
+
+// ready queue, container of ready tasks
 typedef struct ready_q {
     spin_t   lock;
     u32      priorities;
     dllist_t tasks[PRIORITY_COUNT];
+    int      load [PRIORITY_COUNT]; // protected by load_lock[pri];
 } ready_q_t;
 
-// we use sum of timeslice to measure cpu load
-static          spin_t timeslice_lock[PRIORITY_COUNT];
-static __PERCPU int    timeslice     [PRIORITY_COUNT];
-static          int    timeslice_min [PRIORITY_COUNT];
-static          int    timeslice_cpu [PRIORITY_COUNT];
-
+// `tid_next` is actually the head of ready queue, so it's also
+// under the protection of `ready_q.lock`.
 __PERCPU task_t  * tid_prev;
-__PERCPU task_t  * tid_next;     // also protected by ready_q.lock
+__PERCPU task_t  * tid_next;        // protected by ready_q.lock
 __PERCPU u32       no_preempt;
 __PERCPU ready_q_t ready_q;
 static   pool_t    tcb_pool;
@@ -45,14 +46,14 @@ u32 sched_stop(task_t * tid, u32 state) {
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
-    // decrease timeslice of current cpu
-    raw_spin_take(&timeslice_lock);
-    rdy->timeslice[pri] -= tid->timeslice;
-    if (rdy->timeslice[pri] < timeslice_min[pri]) {
-        timeslice_min[pri] = rdy->timeslice[pri];
-        timeslice_cpu[pri] = cpu;
+    // decrease load of current cpu
+    raw_spin_take(&load_lock[pri]);
+    rdy->load[pri] -= tid->timeslice;
+    if (rdy->load[pri] < least_load[pri]) {
+        least_load[pri] = rdy->load[pri];
+        least_cpu [pri] = cpu;
     }
-    raw_spin_give(&timeslice_lock);
+    raw_spin_give(&load_lock[pri]);
 
     // remove task from ready queue
     dl_remove(&rdy->tasks[pri], &tid->dl_sched);
@@ -97,10 +98,10 @@ u32 sched_cont(task_t * tid, u32 state) {
     int      load = 0x7fffffff;
 
     // pick cpu based on load
-    raw_spin_take(&timeslice_lock);
-    int min_load = timeslice_min[pri];
-    int min_cand = timeslice_cpu[pri];
-    raw_spin_give(&timeslice_lock);
+    raw_spin_take(&load_lock[pri]);
+    int min_load = least_load[pri];
+    int min_cand = least_cpu[pri];
+    raw_spin_give(&load_lock[pri]);
 
     aff &= mask;
     if ((0 == aff) || (mask == aff)) {
@@ -112,8 +113,8 @@ u32 sched_cont(task_t * tid, u32 state) {
             int         idx  = CTZ64(aff ^ next);
             ready_q_t * rdy  = percpu_ptr(idx, ready_q);
             raw_spin_take(&rdy->lock);
-            if (rdy->timeslice[pri] < load) {
-                load = rdy->timeslice[pri];
+            if (rdy->load[pri] < load) {
+                load = rdy->load[pri];
                 cand = idx;
             }
             raw_spin_give(&rdy->lock);
@@ -135,28 +136,23 @@ u32 sched_cont(task_t * tid, u32 state) {
     }
 
     // now `cpu` is the target cpu this task will execute on
-    if (min_cand == cpu) {
-        for (int i = 0; i < cpu_activated; ++i) {
-            if (cpu == i) {
-                continue;
-            }
-            ready_q_t * rdy  = percpu_ptr(i, ready_q);
-            raw_spin_take(&rdy->lock);
-            if (rdy->timeslice[pri] < timeslice_min[pri])
-            raw_spin_give(&rdy->lock);
-        }
-    }
-
-    // lock ready queue
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
-    // if the picked cpu is the one with least load
-    // we have to check if this cpu load is still the smallest
-    rdy->timeslice += tid->timeslice;
-    if (min_cand == cpu) {
-        // find out which cpu is the least loaded one
+    // increase load on this ready queue
+    raw_spin_take(&load_lock[pri]);
+    rdy->load[pri] += tid->timeslice;
+    if (least_cpu[pri] == cpu) {
+        // if current cpu is the least loaded one
+        // also increase least_load
+        // current cpu might no longer be the least loaded one
+        // but we don't care, that'll be fixed by other cpu
+        least_load[pri] += tid->timeslice;
+    } else if (rdy->load[pri] < least_load[pri]) {
+        least_load[pri] = rdy->load[pri];
+        least_cpu [pri] = cpu;
     }
+    raw_spin_give(&load_lock[pri]);
 
     // put task back into ready queue
     rdy->priorities |= 1U << pri;
@@ -177,9 +173,9 @@ u32 sched_cont(task_t * tid, u32 state) {
 //------------------------------------------------------------------------------
 // regist idle task of specific cpu
 
-__INIT void sched_regist_idle(int cpu, task_t * tid) {
-    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
-}
+// __INIT void sched_regist_idle(int cpu, task_t * tid) {
+//     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+// }
 
 //------------------------------------------------------------------------------
 // task operations
@@ -245,7 +241,7 @@ static void task_cleanup(task_t * tid) {
     tid->ustack = NULL;
 
     // free all pages in kernel stack
-    pglist_free_all(&tid->kstack);
+    page_block_free(tid->kstack, 4);
 
     dl_remove(&tid->process->tasks, &tid->dl_proc);
     if ((NULL == tid->process->tasks.head) &&
@@ -370,14 +366,14 @@ __INIT void task_lib_init() {
         rdy->lock       = SPIN_INIT;
         rdy->priorities = 0;
         for (int p = 0; p < PRIORITY_COUNT; ++p) {
-            rdy->tasks    [p] = DLLIST_INIT;
-            rdy->timeslice[p] = 0;
+            rdy->tasks[p] = DLLIST_INIT;
+            rdy->load [p] = 0;
         }
     }
 
     for (int p = 0; p < PRIORITY_COUNT; ++p) {
-        timeslice_min[p] = 0;
-        timeslice_cpu[p] = 0;
+        least_load[p] = 0;
+        least_cpu [p] = 0;
     }
 
     pool_init(&tcb_pool, sizeof(task_t));

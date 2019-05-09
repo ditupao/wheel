@@ -21,7 +21,7 @@ typedef struct task {
     int         timeslice;      // total timeslice
     int         remaining;      // remaining timeslice
     int         ret_val;        // return code from PEND state
-    page_t      kstack;         // kernel stack, single page block
+    pfn_t       kstack;         // kernel stack, single page block
     vmrange_t * ustack;         // user stack region
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q

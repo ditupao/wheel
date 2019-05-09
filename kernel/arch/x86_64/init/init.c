@@ -191,7 +191,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
 
     // prepare tcb for root and idle-0
     root_tid = task_create(PRIORITY_NONRT, 0, root_proc, 0,0,0,0);
-    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 0, idle_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 1, idle_proc, 0,0,0,0);
 
     // activate two tasks, switch to root automatically
     dbg_print("> cpu %02d started.\n", cpu_activated);
@@ -220,7 +220,7 @@ __INIT __NORETURN void sys_init_ap() {
     thiscpu_var(tid_next) = &tcb_temp;
 
     // prepare tcb for idle task
-    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, cpu_activated, idle_proc, 0,0,0,0);
+    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 1UL << cpu_activated, idle_proc, 0,0,0,0);
 
     // activate idle-x, and switch task manually
     dbg_print("> cpu %02d started.\n", cpu_activated);
@@ -296,7 +296,7 @@ static void idle_proc() {
     task_t * tid = thiscpu_var(tid_prev);
     raw_spin_take(&tid->lock);
 
-    // dbg_print("<idle-%d>", cpu_index());
+    dbg_print("<idle-%d>", cpu_index());
     while (1) {
         ASM("hlt");
     }

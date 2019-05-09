@@ -141,8 +141,8 @@ static inline void * phys_to_virt(usize pa) {
     return NULL;
 }
 
-static inline u32 cpu_index() {
-    return (read_gsbase() - percpu_base) / percpu_size;
+static inline int cpu_index() {
+    return (int) ((read_gsbase() - percpu_base) / percpu_size);
 }
 
 static inline void * calc_percpu_addr(u32 cpu, void * ptr) {

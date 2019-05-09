@@ -20,7 +20,7 @@ void semaphore_destroy(semaphore_t * sem) {
 
     for (dlnode_t * dl = sem->pend_q.head; NULL != dl; dl = dl->next) {
         task_t * tid = PARENT(dl, task_t, dl_sched);
-        u32      cpu = tid->cpu_idx;
+        int      cpu = tid->last_cpu;
 
         raw_spin_take(&tid->lock);
         sched_cont(tid, TS_PEND);
@@ -134,7 +134,7 @@ void semaphore_give(semaphore_t * sem) {
     }
 
     task_t * tid = PARENT(dl, task_t, dl_sched);
-    u32      cpu = tid->cpu_idx;
+    int      cpu = tid->last_cpu;
     raw_spin_take(&tid->lock);
     sched_cont(tid, TS_PEND);
     raw_spin_give(&tid->lock);

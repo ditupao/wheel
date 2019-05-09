@@ -6,14 +6,14 @@
 typedef struct ready_q {
     spin_t   lock;
     u32      priorities;
-    dllist_t tasks    [PRIORITY_COUNT];
-    int      timeslice[PRIORITY_COUNT]; // sum of timeslices of each task
+    dllist_t tasks[PRIORITY_COUNT];
 } ready_q_t;
 
 // we use sum of timeslice to measure cpu load
-static spin_t timeslice_lock;
-static int    timeslice_min[PRIORITY_COUNT];
-static int    timeslice_cpu[PRIORITY_COUNT];
+static          spin_t timeslice_lock[PRIORITY_COUNT];
+static __PERCPU int    timeslice     [PRIORITY_COUNT];
+static          int    timeslice_min [PRIORITY_COUNT];
+static          int    timeslice_cpu [PRIORITY_COUNT];
 
 __PERCPU task_t  * tid_prev;
 __PERCPU task_t  * tid_next;     // also protected by ready_q.lock
@@ -40,11 +40,12 @@ u32 sched_stop(task_t * tid, u32 state) {
     }
 
     // lock ready queue of target cpu
-    u32         cpu = tid->cpu_idx;
+    u32         cpu = tid->last_cpu;
     u32         pri = tid->priority;
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
 
+    // decrease timeslice of current cpu
     raw_spin_take(&timeslice_lock);
     rdy->timeslice[pri] -= tid->timeslice;
     if (rdy->timeslice[pri] < timeslice_min[pri]) {
@@ -84,20 +85,27 @@ u32 sched_cont(task_t * tid, u32 state) {
         return old_state;
     }
 
-    int pri = tid->priority;
-    int cpu = tid->cpu_idx;     // last cpu
+    int      pri = tid->priority;
+    int      cpu = tid->last_cpu;   // old cpu
+    cpuset_t aff = tid->affinity;
 
     // pick a new cpu based on load
     // if the difference of load is not so significant
     // then still execute on the old cpu
-    cpuset_t aff  = tid->affinity;
+    cpuset_t mask = (1UL << cpu_activated) - 1;
     int      cand = 0;
     int      load = 0x7fffffff;
-    if (NO_CPU == aff) {
-        raw_spin_take(&timeslice_lock);
-        load = timeslice_min[pri];
-        cand = timeslice_cpu[pri];
-        raw_spin_give(&timeslice_lock);
+
+    // pick cpu based on load
+    raw_spin_take(&timeslice_lock);
+    int min_load = timeslice_min[pri];
+    int min_cand = timeslice_cpu[pri];
+    raw_spin_give(&timeslice_lock);
+
+    aff &= mask;
+    if ((0 == aff) || (mask == aff)) {
+        load = min_load;
+        cand = min_cand;
     } else {
         while (aff) {
             cpuset_t    next = aff & (aff - 1);
@@ -113,15 +121,42 @@ u32 sched_cont(task_t * tid, u32 state) {
         }
     }
 
-    if (cand != cpu) {
+    aff = tid->affinity & mask;
+    if ((cpu < 0) || (cpu >= cpu_activated)) {
+        // last cpu index not valid, use the candidate
+        cpu = cand;
+    } else if ((0 != aff) && (0 == (aff & (1UL << cpu)))) {
+        // last cpu is not affinitied, use the candidate
+        cpu = cand;
+    } else if (cand != cpu) {
         // TODO: if load difference is not so significant
         //       then we'll still use the old cpu
         cpu = cand;
     }
 
+    // now `cpu` is the target cpu this task will execute on
+    if (min_cand == cpu) {
+        for (int i = 0; i < cpu_activated; ++i) {
+            if (cpu == i) {
+                continue;
+            }
+            ready_q_t * rdy  = percpu_ptr(i, ready_q);
+            raw_spin_take(&rdy->lock);
+            if (rdy->timeslice[pri] < timeslice_min[pri])
+            raw_spin_give(&rdy->lock);
+        }
+    }
+
     // lock ready queue
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
     raw_spin_take(&rdy->lock);
+
+    // if the picked cpu is the one with least load
+    // we have to check if this cpu load is still the smallest
+    rdy->timeslice += tid->timeslice;
+    if (min_cand == cpu) {
+        // find out which cpu is the least loaded one
+    }
 
     // put task back into ready queue
     rdy->priorities |= 1U << pri;
@@ -140,6 +175,13 @@ u32 sched_cont(task_t * tid, u32 state) {
 }
 
 //------------------------------------------------------------------------------
+// regist idle task of specific cpu
+
+__INIT void sched_regist_idle(int cpu, task_t * tid) {
+    ready_q_t * rdy = percpu_ptr(cpu, ready_q);
+}
+
+//------------------------------------------------------------------------------
 // task operations
 
 // create new task
@@ -147,48 +189,48 @@ u32 sched_cont(task_t * tid, u32 state) {
 // TODO: also save tid in page_array (kernel object always in higher half,
 //       8-bytes aligned? 47-3=45 bits, so only 45 bits is enough. If we
 //       want to use less bits, we can allocate tcb only from one pool)
-task_t * task_create(int priority, int cpu_idx, void * proc,
+task_t * task_create(int priority, cpuset_t affinity, void * proc,
                      void * a1, void * a2, void * a3, void * a4) {
     dbg_assert((0 <= priority) && (priority < PRIORITY_COUNT));
-    dbg_assert((0 <= cpu_idx)  && (cpu_idx  < cpu_installed));
 
     // allocate tcb
     task_t * tid = pool_obj_alloc(&tcb_pool);
 
     // allocate space for kernel stack, must be continuous
-    pfn_t pstk = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
-    if (NO_PAGE == pstk) {
+    pfn_t kstk = page_block_alloc(ZONE_DMA|ZONE_NORMAL, 4);
+    if (NO_PAGE == kstk) {
         // memory not enough, cannot create task
         return NULL;
     }
 
     // mark allocated page as kstack type
     for (pfn_t i = 0; i < 16; ++i) {
-        page_array[pstk + i].type  = PT_KSTACK;
-        page_array[pstk + i].block = 0;
+        page_array[kstk + i].type  = PT_KSTACK;
+        page_array[kstk + i].block = 0;
+        page_array[kstk + i].order = 4;
     }
+    page_array[kstk].block = 1;
+    page_array[kstk].order = 4;
 
-    usize vstk = (usize) phys_to_virt((usize) pstk << PAGE_SHIFT);
+    // setup register info on the new stack
+    usize vstk = (usize) phys_to_virt((usize) kstk << PAGE_SHIFT);
     regs_init(&tid->regs, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
 
+    // fill task control block
     tid->lock      = SPIN_INIT;
     tid->state     = TS_SUSPEND;
     tid->ret_val   = 0;
     tid->priority  = priority;
-    tid->affinity  = NO_CPU;
-    tid->cpu_idx   = 0;
+    tid->affinity  = affinity;
+    tid->last_cpu  = 0;
     tid->timeslice = 200;   // TODO: put default timeslice in config
     tid->remaining = 200;
-    tid->kstack    = PGLIST_INIT;
+    tid->kstack    = kstk;
     tid->ustack    = NULL;
     tid->dl_sched  = DLNODE_INIT;
     tid->queue     = NULL;
     tid->dl_proc   = DLNODE_INIT;
     tid->process   = NULL;
-
-    page_array[pstk].block = 1;
-    page_array[pstk].order = 4;
-    pglist_push_tail(&tid->kstack, pstk);
 
     return tid;
 }
@@ -248,7 +290,6 @@ void task_yield() {
     task_t * cand = PARENT(rdy->tasks[pri].head, task_t, dl_sched);
     thiscpu_var(tid_next) = cand;
 
-    // dbg_print("<%p->%p>", tid, cand);
     irq_spin_give(&rdy->lock, key);
 
     task_switch();
@@ -270,7 +311,6 @@ void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
 
     u32 key = irq_spin_take(&tid->lock);
-    u32 cpu = tid->cpu_idx;
     u32 ts  = sched_cont(tid, TS_SUSPEND);
     irq_spin_give(&tid->lock, key);
 
@@ -278,10 +318,10 @@ void task_resume(task_t * tid) {
         return;
     }
 
-    if (cpu_index() == cpu) {
+    if (cpu_index() == tid->last_cpu) {
         task_switch();
     } else {
-        smp_reschedule(cpu);
+        smp_reschedule(tid->last_cpu);
     }
 }
 
@@ -303,7 +343,6 @@ void task_wakeup(task_t * tid) {
     dbg_assert(NULL != tid);
 
     u32 key = irq_spin_take(&tid->lock);
-    u32 cpu = tid->cpu_idx;
     u32 ts  = sched_cont(tid, TS_DELAY);
     irq_spin_give(&tid->lock, key);
 
@@ -311,10 +350,10 @@ void task_wakeup(task_t * tid) {
         return;
     }
 
-    if (cpu_index() == cpu) {
+    if (cpu_index() == tid->last_cpu) {
         task_switch();
     } else {
-        smp_reschedule(cpu);
+        smp_reschedule(tid->last_cpu);
     }
 }
 

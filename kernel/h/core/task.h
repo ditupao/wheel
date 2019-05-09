@@ -17,11 +17,11 @@ typedef struct task {
     u32         state;          // task state
     int         priority;       // must < PRIORITY_COUNT, could use shorter type
     cpuset_t    affinity;       // bit mask of allowed cpu
-    int         cpu_idx;        // must < cpu_installed, could use shorter type
+    int         last_cpu;       // must < cpu_installed, could use shorter type
     int         timeslice;      // total timeslice
     int         remaining;      // remaining timeslice
     int         ret_val;        // return code from PEND state
-    pglist_t    kstack;         // kernel stack page list
+    page_t      kstack;         // kernel stack, single page block
     vmrange_t * ustack;         // user stack region
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
@@ -51,7 +51,7 @@ static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
 
 extern u32      sched_stop  (task_t * tid, u32 state);
 extern u32      sched_cont  (task_t * tid, u32 state);
-extern task_t * task_create (int priority, int cpu_idx, void * proc,
+extern task_t * task_create (int priority, cpuset_t affinity, void * proc,
                              void * a1, void * a2, void * a3, void * a4);
 extern void     task_exit   ();
 extern void     task_yield  ();

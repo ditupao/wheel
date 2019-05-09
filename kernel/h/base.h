@@ -20,8 +20,6 @@ typedef u64                     cpuset_t;       // at most 64 cpus
 
 #define NO_ADDR                 ((usize) -1)    // invalid address
 #define NO_PAGE                 ((pfn_t) -1)    // invalid page number
-#define NO_CPU                  ((cpuset_t)  0)
-#define ALL_CPU                 ((cpuset_t) -1)
 #define OK                      ((int)    0)    // return code
 #define ERROR                   ((int)   -1)    // return code
 #define YES                     ((int)    1)    // boolean value

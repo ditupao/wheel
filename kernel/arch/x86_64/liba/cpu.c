@@ -204,7 +204,7 @@ static void exp_default(int vec, int_frame_t * f) {
         "??", "??", "??", "??", "??", "??", "SX", "??"
     };
 
-    dbg_print("#%s:", sym[vec]);
+    dbg_print("#%s on cpu-%d:", sym[vec], cpu_index());
     dbg_print(" sp=%x:%llx", f->ss, f->rsp);
     dbg_print(" ip=%x:%llx", f->cs, f->rip);
     dbg_print(" flg=%llx err=%llx.\n", f->rflags, f->errcode);

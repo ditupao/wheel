@@ -299,3 +299,7 @@ __INIT void kernel_ctx_init() {
     // switch to kernel context
     mmu_ctx_set(kernel_ctx);
 }
+
+__INIT void kernel_ctx_load() {
+    mmu_ctx_set(kernel_ctx);
+}

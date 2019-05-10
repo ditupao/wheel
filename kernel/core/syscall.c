@@ -18,7 +18,7 @@ static void thread_entry(void * entry) {
 // entry of the newly spawned process, new vmspace, start in kernel mode
 static void process_entry(void * entry, void * sp) {
     dbg_assert(((usize) sp % sizeof(usize)) == 0);
-    dbg_print("new process, ip=%llx sp=%llx:\n", entry, sp);
+    dbg_print("new process running on cpu-%d, ip=%llx sp=%llx:\n", cpu_index(), entry, sp);
     return_to_user((usize) entry, (usize) sp);
 }
 

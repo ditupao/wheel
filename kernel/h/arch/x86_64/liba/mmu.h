@@ -17,5 +17,6 @@ extern void  mmu_unmap(usize ctx, usize va, usize n);
 
 // requires: page-array
 extern __INIT void kernel_ctx_init();
+extern __INIT void kernel_ctx_load();
 
 #endif // ARCH_X86_64_LIBA_MMU_H

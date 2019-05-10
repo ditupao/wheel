@@ -18,8 +18,8 @@ static __INIT void parse_madt(madt_t * tbl) {
     u8 * end = (u8 *) tbl + tbl->header.length;
     u8 * p   = (u8 *) tbl + sizeof(madt_t);
 
-    // cpu_installed = 0;
-    // cpu_activated = 0;
+    cpu_installed = 0;
+    cpu_activated = 0;
 
     loapic_override(tbl->loapic_addr);
     while (p < end) {
@@ -214,6 +214,9 @@ __INIT __NORETURN void sys_init_ap() {
     // setup local apic and timer
     loapic_dev_init();
 
+    // load kernel page table
+    kernel_ctx_load();
+
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
     thiscpu_var(tid_prev) = &tcb_temp;
@@ -286,8 +289,6 @@ static void root_proc() {
         NULL
     };
     do_spawn_process(argv[0], argv, envp);
-
-    while (1) {}
 }
 
 static void idle_proc() {

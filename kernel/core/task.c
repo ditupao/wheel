@@ -86,25 +86,25 @@ u32 sched_cont(task_t * tid, u32 state) {
         return old_state;
     }
 
-    int      pri = tid->priority;
-    int      cpu = tid->last_cpu;   // old cpu
-    cpuset_t aff = tid->affinity;
+    int pri = tid->priority;
+    int cpu = tid->last_cpu;    // old cpu
 
-    // pick a new cpu based on load
-    // if the difference of load is not so significant
-    // then still execute on the old cpu
+    // take load_lock, perform load counting
+    // TODO: exclude idle tasks
+    raw_spin_take(&load_lock[pri]);
+
+    cpuset_t aff  = tid->affinity;
     cpuset_t mask = (1UL << cpu_activated) - 1;
     int      cand = 0;
     int      load = 0x7fffffff;
 
-    // pick cpu based on load
-    raw_spin_take(&load_lock[pri]);
+    // choose target cpu based on load
     int min_load = least_load[pri];
-    int min_cand = least_cpu[pri];
-    raw_spin_give(&load_lock[pri]);
+    int min_cand = least_cpu [pri];
 
     aff &= mask;
     if ((0 == aff) || (mask == aff)) {
+        // no affinity, use the least loaded one
         load = min_load;
         cand = min_cand;
     } else {
@@ -112,23 +112,19 @@ u32 sched_cont(task_t * tid, u32 state) {
             cpuset_t    next = aff & (aff - 1);
             int         idx  = CTZ64(aff ^ next);
             ready_q_t * rdy  = percpu_ptr(idx, ready_q);
-            raw_spin_take(&rdy->lock);
             if (rdy->load[pri] < load) {
                 load = rdy->load[pri];
                 cand = idx;
             }
-            raw_spin_give(&rdy->lock);
             aff = next;
         }
     }
 
     aff = tid->affinity & mask;
     if ((cpu < 0) || (cpu >= cpu_activated)) {
-        // last cpu index not valid, use the candidate
-        cpu = cand;
+        cpu = cand;     // last cpu not valid
     } else if ((0 != aff) && (0 == (aff & (1UL << cpu)))) {
-        // last cpu is not affinitied, use the candidate
-        cpu = cand;
+        cpu = cand;     // last cpu not affined
     } else if (cand != cpu) {
         // TODO: if load difference is not so significant
         //       then we'll still use the old cpu
@@ -137,26 +133,28 @@ u32 sched_cont(task_t * tid, u32 state) {
 
     // now `cpu` is the target cpu this task will execute on
     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
-    raw_spin_take(&rdy->lock);
+    rdy->load[pri] += tid->timeslice;
 
     // increase load on this ready queue
-    raw_spin_take(&load_lock[pri]);
-    rdy->load[pri] += tid->timeslice;
     if (least_cpu[pri] == cpu) {
-        // if current cpu is the least loaded one
-        // also increase least_load
         // current cpu might no longer be the least loaded one
-        // but we don't care, that'll be fixed by other cpu
+        // loop through all cpu and find one
         least_load[pri] += tid->timeslice;
-    } else if (rdy->load[pri] < least_load[pri]) {
-        least_load[pri] = rdy->load[pri];
-        least_cpu [pri] = cpu;
+        for (int i = 0; i < cpu_activated; ++i) {
+            ready_q_t * rdy = percpu_ptr(i, ready_q);
+            if (rdy->load[pri] < least_load[pri]) {
+                least_load[pri] = rdy->load[pri];
+                least_cpu [pri] = i;
+            }
+        }
     }
     raw_spin_give(&load_lock[pri]);
 
     // put task back into ready queue
+    raw_spin_take(&rdy->lock);
     rdy->priorities |= 1U << pri;
-    tid->queue = &rdy->tasks[pri];
+    tid->last_cpu    = cpu;
+    tid->queue       = &rdy->tasks[pri];
     dl_push_tail(tid->queue, &tid->dl_sched);
 
     // check whether we can preempt
@@ -169,13 +167,6 @@ u32 sched_cont(task_t * tid, u32 state) {
     raw_spin_give(&rdy->lock);
     return old_state;
 }
-
-//------------------------------------------------------------------------------
-// regist idle task of specific cpu
-
-// __INIT void sched_regist_idle(int cpu, task_t * tid) {
-//     ready_q_t * rdy = percpu_ptr(cpu, ready_q);
-// }
 
 //------------------------------------------------------------------------------
 // task operations
@@ -236,19 +227,23 @@ static void task_cleanup(task_t * tid) {
     dbg_assert(TS_ZOMBIE == tid->state);
 
     // unmap and remove vm region for user stack
-    vmspace_unmap(&tid->process->vm, tid->ustack);
-    vmspace_free (&tid->process->vm, tid->ustack);
-    tid->ustack = NULL;
+    if ((NULL != tid->process) && (NULL != tid->ustack)) {
+        vmspace_unmap(&tid->process->vm, tid->ustack);
+        vmspace_free (&tid->process->vm, tid->ustack);
+        tid->ustack = NULL;
+    }
 
     // free all pages in kernel stack
     page_block_free(tid->kstack, 4);
 
-    dl_remove(&tid->process->tasks, &tid->dl_proc);
-    if ((NULL == tid->process->tasks.head) &&
-        (NULL == tid->process->tasks.tail)) {
-        // we can only create new thread from the same process
-        // if this is the last thread, meaning the process is finished
-        process_delete(tid->process);
+    // remove this thread from the process
+    if (NULL != tid->process) {
+        dl_remove(&tid->process->tasks, &tid->dl_proc);
+        if ((NULL == tid->process->tasks.head) &&
+            (NULL == tid->process->tasks.tail)) {
+            // if this is the last thread, also delete the process
+            process_delete(tid->process);
+        }
     }
 
     // TODO: signal parent for finish and wait

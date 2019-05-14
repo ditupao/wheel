@@ -87,6 +87,7 @@ static inline void io_wait() {
     ASM("outb %%al, $0x80" :: "a"(0));
 }
 
+static inline void cpu_sleep() { ASM("hlt"); }
 static inline void cpu_relax() { ASM("pause"); }
 static inline void cpu_fence() { ASM("mfence" ::: "memory"); }
 static inline void cpuid(u32 * a, u32 * b, u32 * c, u32 * d) {

@@ -180,6 +180,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     work_lib_init();
     tick_lib_init();
     task_lib_init();
+    sched_lib_init();
     vmspace_lib_init();
     process_lib_init();
     syscall_lib_init();
@@ -297,8 +298,7 @@ static void idle_proc() {
     task_t * tid = thiscpu_var(tid_prev);
     raw_spin_take(&tid->lock);
 
-    dbg_print("<idle-%d>", cpu_index());
     while (1) {
-        ASM("hlt");
+        cpu_sleep();
     }
 }

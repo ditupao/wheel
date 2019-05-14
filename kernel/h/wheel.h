@@ -7,6 +7,7 @@
 #include <core/work.h>
 #include <core/tick.h>
 #include <core/task.h>
+#include <core/sched.h>
 #include <core/process.h>
 #include <core/syscall.h>
 

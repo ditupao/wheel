@@ -7,6 +7,7 @@
 #include <core/process.h>
 #include <libk/spin.h>
 #include <libk/list.h>
+#include <libk/rbtree.h>
 
 // task control block
 // - kstack: used to execute syscall handler and exception handler
@@ -14,17 +15,37 @@
 typedef struct task {
     regs_t      regs;           // arch-specific status
     spin_t      lock;           // spinlock used in state-switching
+
+#if 1
     u32         state;          // task state
     int         priority;       // must < PRIORITY_COUNT, could use shorter type
     cpuset_t    affinity;       // bit mask of allowed cpu
     int         last_cpu;       // must < cpu_installed, could use shorter type
     int         timeslice;      // total timeslice
     int         remaining;      // remaining timeslice
-    int         ret_val;        // return code from PEND state
-    pfn_t       kstack;         // kernel stack, single page block
-    vmrange_t * ustack;         // user stack region
     dlnode_t    dl_sched;       // node in ready_q/pend_q
     dllist_t  * queue;          // current ready_q/pend_q
+#else
+    u32      state;
+    int      priority;
+    int      last_cpu;
+    union {
+        struct {
+            int      timeslice;
+            int      remaining;
+            dlnode_t dl_sched;
+        } rt;
+        struct {
+            int      vruntime;
+            int      weight;
+            rbnode_t rb_sched;
+        } fair;
+    };
+#endif
+
+    int         ret_val;        // return code from PEND state
+    pfn_t       kstack;         // kernel stack, one block
+    vmrange_t * ustack;         // user stack region
     dlnode_t    dl_proc;        // node in process
     process_t * process;        // current process
 } task_t;
@@ -41,20 +62,9 @@ typedef struct task {
 #define TS_SUSPEND      0x04    // stopped on purpose, not on any q
 #define TS_ZOMBIE       0x08    // finished, but TCB still present
 
-extern __PERCPU task_t * tid_prev;
-extern __PERCPU task_t * tid_next;
-extern __PERCPU u32      no_preempt;
-
-// the last bit in `no_preempt` means there's task waiting to preempt
-static inline void preempt_lock  () { thiscpu32_add(&no_preempt, 2); }
-static inline void preempt_unlock() { thiscpu32_sub(&no_preempt, 2); }
-
-extern u32      sched_stop  (task_t * tid, u32 state);
-extern u32      sched_cont  (task_t * tid, u32 state);
 extern task_t * task_create (int priority, cpuset_t affinity, void * proc,
                              void * a1, void * a2, void * a3, void * a4);
 extern void     task_exit   ();
-extern void     task_yield  ();
 extern void     task_suspend();
 extern void     task_resume (task_t * tid);
 extern void     task_delay  (int ticks);

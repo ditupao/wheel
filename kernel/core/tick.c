@@ -95,16 +95,10 @@ void tick_advance() {
         irq_spin_give(&tick_q.lock, k);
     }
 
-    // round robin (not only for non-rt tasks)
-    task_t * tid = thiscpu_var(tid_prev);
-    if (PRIORITY_IDLE != tid->priority) {
-        if (--tid->remaining <= 0) {
-            tid->remaining = tid->timeslice;
-            task_yield();
-        }
-    }
+    sched_tick();
 }
 
+// busy wait
 void tick_delay(int ticks) {
     usize start = tick_count;
     while ((tick_count - start) < (usize) ticks) {

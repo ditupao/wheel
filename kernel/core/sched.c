@@ -14,7 +14,7 @@ __PERCPU task_t * tid_prev;
 __PERCPU task_t * tid_next;        // protected by ready_q.lock
 
 //------------------------------------------------------------------------------
-// real time scheduling class, priority 0~29
+// helper function
 
 // find the cpu with lowest current priority,
 // if multiple cpu have the lowest priority, then find the one with less load
@@ -147,6 +147,17 @@ u32 sched_cont(task_t * tid, u32 bits) {
 
 //------------------------------------------------------------------------------
 // scheduler operations
+
+// disable task preemption
+void preempt_lock() {
+    thiscpu32_inc(&no_preempt);
+}
+
+// re-enable task preemption, and perform task switch
+void preempt_unlock() {
+    thiscpu32_dec(&no_preempt);
+    // task_switch();
+}
 
 #if 0
 static void sched_timeout(pend_q_t * pend_q, task_t * tid) {

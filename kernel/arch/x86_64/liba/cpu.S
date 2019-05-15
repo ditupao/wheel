@@ -5,6 +5,8 @@
 
 GLOBAL_FUNC(int0_entry)
 GLOBAL_FUNC(int1_entry)
+GLOBAL_FUNC(exception_stub)
+GLOBAL_FUNC(interrupt_stub)
 
 GLOBAL_FUNC(syscall_entry)
 GLOBAL_FUNC(task_entry)
@@ -173,15 +175,17 @@ interrupt_stub:
     addq    $16, %rsp               // pop dummy return addr and rbp
 
     decl    %gs:(int_depth)
-    movl    %gs:(int_depth), %eax
-    cmpl    $0, %eax                // if we're still inside ISR
+    cmpl    $0, %gs:(int_depth)     // if we're still inside ISR
     jne     4f
+    // cmpl    $0, %gs:(no_preempt)    // if we've disabled preemption
+    // jne     3f
 
 return_to_task:
     movq    %gs:(tid_next), %rdi
     movq    0x00(%rdi), %rsp        // get tid_next->regs->rsp
     movq    0x08(%rdi), %rbx        // get tid_next->regs->rsp0
     movq    0x10(%rdi), %rcx        // get tid_next->regs->cr3
+
     movq    %rdi, %gs:(tid_prev)    // update `tid_prev`
     movq    $tss, %rdx
     movq    %rbx, %gs:4(%rdx)       // store rsp0 in tss (maybe unaligned?)

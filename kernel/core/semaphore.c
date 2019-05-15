@@ -56,11 +56,13 @@ static void semaphore_timeout(semaphore_t * sem, task_t * tid) {
 // return ERROR if failed (might block)
 // this function cannot be called inside ISR
 int semaphore_take(semaphore_t * sem, int timeout) {
+    // preempt_lock();
     u32 key = irq_spin_take(&sem->lock);
 
     if (sem->count) {
         --sem->count;
         irq_spin_give(&sem->lock, key);
+        // preempt_unlock();
         return OK;
     }
 
@@ -71,7 +73,6 @@ int semaphore_take(semaphore_t * sem, int timeout) {
     sched_stop(tid, TS_PEND);
     tid->ret_val = OK;
     dl_push_tail(&sem->pend_q, &tid->dl_sched); // TODO: priority-based or FIFO?
-    // tid->queue = &sem->pend_q;
 
     wdog_t wd;
     wdog_init(&wd);
@@ -84,6 +85,7 @@ int semaphore_take(semaphore_t * sem, int timeout) {
     // release locks
     raw_spin_give(&tid->lock);
     irq_spin_give(&sem->lock, key);
+    // preempt_unlock();
 
     // pend here
     task_switch();

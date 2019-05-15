@@ -25,7 +25,7 @@ typedef void (* isr_proc_t) (int vec, int_frame_t * sp);
 
 // global data
 extern __INITDATA int cpu_installed;
-extern            int cpu_activated;
+extern volatile   int cpu_activated;
 extern            u64 percpu_base;
 extern            u64 percpu_size;
 extern __PERCPU   int int_depth;

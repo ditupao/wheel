@@ -54,7 +54,7 @@ static idt_ent_t idt[VEC_NUM_COUNT];
 __PERCPU tss_t   tss;
 
 __INITDATA int cpu_installed = 0;  // number of cpu installed
-           int cpu_activated = 0;  // number of cpu activated
+volatile   int cpu_activated = 0;  // number of cpu activated
            u64 percpu_base   = 0;  // cpu0's offset to its percpu area
            u64 percpu_size   = 0;  // length of one per-cpu area
 __PERCPU   int int_depth;

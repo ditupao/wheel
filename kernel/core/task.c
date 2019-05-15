@@ -6,7 +6,7 @@ static pool_t tcb_pool;
 // task operations
 
 // create new task
-task_t * task_create(int priority, cpuset_t affinity, void * proc,
+task_t * task_create(int priority, void * proc,
                      void * a1, void * a2, void * a3, void * a4) {
     dbg_assert((0 <= priority) && (priority < PRIORITY_COUNT));
 
@@ -33,24 +33,21 @@ task_t * task_create(int priority, cpuset_t affinity, void * proc,
     // setup register info on the new stack
     usize vstk = (usize) phys_to_virt((usize) kstk << PAGE_SHIFT);
     regs_init(&tid->regs, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
-
-    // fill task control block
     tid->lock      = SPIN_INIT;
+
+    tid->state     = TS_SUSPEND;
+    tid->priority  = priority;
+    tid->affinity  = 0UL;
+    tid->last_cpu  = -1;
+    tid->timeslice = 200;
+    tid->remaining = 200;
+    tid->dl_sched  = DLNODE_INIT;
+
     tid->ret_val   = 0;
     tid->kstack    = kstk;
     tid->ustack    = NULL;
     tid->dl_proc   = DLNODE_INIT;
     tid->process   = NULL;
-
-    tid->state     = TS_SUSPEND;
-    tid->priority  = priority;
-    tid->affinity  = affinity;
-    tid->last_cpu  = 0;
-    tid->timeslice = 200;   // TODO: put default timeslice in config
-    tid->remaining = 200;
-    tid->dl_sched  = DLNODE_INIT;
-    tid->queue     = NULL;
-    // sched_init(tid, priority);
 
     return tid;
 }
@@ -114,17 +111,18 @@ void task_resume(task_t * tid) {
     dbg_assert(NULL != tid);
 
     u32 key = irq_spin_take(&tid->lock);
-    u32 ts  = sched_cont(tid, TS_SUSPEND);
+    u32 old = sched_cont(tid, TS_SUSPEND);
+    int cpu = tid->last_cpu;
     irq_spin_give(&tid->lock, key);
 
-    if (TS_READY == ts) {
+    if (TS_READY == old) {
         return;
     }
 
-    if (cpu_index() == tid->last_cpu) {
+    if (cpu_index() == cpu) {
         task_switch();
     } else {
-        smp_reschedule(tid->last_cpu);
+        smp_reschedule(cpu);
     }
 }
 
@@ -146,17 +144,18 @@ void task_wakeup(task_t * tid) {
     dbg_assert(NULL != tid);
 
     u32 key = irq_spin_take(&tid->lock);
-    u32 ts  = sched_cont(tid, TS_DELAY);
+    u32 old = sched_cont(tid, TS_DELAY);
+    int cpu = tid->last_cpu;
     irq_spin_give(&tid->lock, key);
 
-    if (TS_READY == ts) {
+    if (TS_READY == old) {
         return;
     }
 
-    if (cpu_index() == tid->last_cpu) {
+    if (cpu_index() == cpu) {
         task_switch();
     } else {
-        smp_reschedule(tid->last_cpu);
+        smp_reschedule(cpu);
     }
 }
 

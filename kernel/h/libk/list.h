@@ -118,4 +118,12 @@ static inline void dl_remove(dllist_t * list, dlnode_t * node) {
     }
 }
 
+static inline int dl_is_empty(dllist_t * list) {
+    if ((NULL == list->head) && (NULL == list->tail)) {
+        return YES;
+    } else {
+        return NO;
+    }
+}
+
 #endif // LIBK_LIST_H

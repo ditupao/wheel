@@ -71,7 +71,7 @@ int semaphore_take(semaphore_t * sem, int timeout) {
     sched_stop(tid, TS_PEND);
     tid->ret_val = OK;
     dl_push_tail(&sem->pend_q, &tid->dl_sched); // TODO: priority-based or FIFO?
-    tid->queue = &sem->pend_q;
+    // tid->queue = &sem->pend_q;
 
     wdog_t wd;
     wdog_init(&wd);

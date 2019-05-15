@@ -107,13 +107,11 @@ static __INIT void parse_mmap(u8 * mmap_buf, u32 mmap_len) {
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
 
-// init process, root task and idle tasks
-static __INITDATA task_t * root_tid;
-static __PERCPU   task_t * idle_tid;
+// static __PERCPU   task_t * tid_temp;
+static __INITDATA task_t * tid_root;
 
 // forward declarations
 static void root_proc();
-static void idle_proc();
 
 __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     serial_dev_init();
@@ -187,18 +185,17 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    // thiscpu_var(tid_temp) = &tcb_temp;
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
-    // prepare tcb for root and idle-0
-    root_tid = task_create(PRIORITY_NONRT, 0, root_proc, 0,0,0,0);
-    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 1, idle_proc, 0,0,0,0);
-
-    // activate two tasks, switch to root automatically
+    // cpu pre-kernel initialization finished
     dbg_print("> cpu %02d started.\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
-    task_resume(thiscpu_var(idle_tid));
-    task_resume(root_tid);
+
+    // start executing root task
+    tid_root = task_create(PRIORITY_NONRT, root_proc, 0,0,0,0);
+    task_resume(tid_root);
 
     dbg_print("YOU CAN'T SEE THIS LINE!\n");
     while (1) {}
@@ -220,18 +217,16 @@ __INIT __NORETURN void sys_init_ap() {
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    // thiscpu_var(tid_temp) = &tcb_temp;
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
-    // prepare tcb for idle task
-    thiscpu_var(idle_tid) = task_create(PRIORITY_IDLE, 1UL << cpu_activated, idle_proc, 0,0,0,0);
-
-    // activate idle-x, and switch task manually
+    // cpu pre-kernel initialization finished
     dbg_print("> cpu %02d started.\n", cpu_activated);
     atomic32_inc((u32 *) &cpu_activated);
-    task_resume(thiscpu_var(idle_tid));             // won't preempt
-    thiscpu_var(tid_next) = thiscpu_var(idle_tid);
-    task_switch();
+
+    // start executing idle task
+    sched_yield();
 
     dbg_print("YOU CAN'T SEE THIS LINE!\n");
     while (1) {}
@@ -258,14 +253,18 @@ static void root_proc() {
 
     // start application processors one-by-one
     while (cpu_activated < cpu_installed) {
-        u32 idx = cpu_activated;
+        int idx = cpu_activated;
         loapic_emit_init(idx);          // send INIT
         tick_delay(10);                 // wait for 10ms
         loapic_emit_sipi(idx, 0x7c);    // send SIPI
         tick_delay(1);                  // wait for 1ms
         loapic_emit_sipi(idx, 0x7c);    // send SIPI again
         tick_delay(1);                  // wait for 1ms
-        while (percpu_var(idx, tid_prev) != percpu_var(idx, idle_tid)) {
+
+        // during pre-kernel stage, each cpu use the same kernel stack
+        // so we have to start each cpu one-by-one
+        // while (percpu_var(idx, tid_prev) == percpu_var(idx, tid_temp)) {
+        while (idx + 1 != cpu_activated) {
             tick_delay(10);
         }
     }
@@ -292,13 +291,13 @@ static void root_proc() {
     do_spawn_process(argv[0], argv, envp);
 }
 
-static void idle_proc() {
-    // take spinlock and never give out
-    // so this idle task can never be deleted
-    task_t * tid = thiscpu_var(tid_prev);
-    raw_spin_take(&tid->lock);
+// static void idle_proc() {
+//     // take spinlock and never give out
+//     // so this idle task can never be deleted
+//     task_t * tid = thiscpu_var(tid_prev);
+//     raw_spin_take(&tid->lock);
 
-    while (1) {
-        cpu_sleep();
-    }
-}
+//     while (1) {
+//         cpu_sleep();
+//     }
+// }

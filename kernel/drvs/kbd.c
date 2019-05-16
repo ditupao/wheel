@@ -172,6 +172,6 @@ static void kbd_proc() {
 __INIT void kbd_lib_init() {
     kbd_pipe = pipe_create();
     tty_pipe = pipe_create();
-    task_t * kbd_task = task_create(0, kbd_proc, 0,0,0,0);
+    task_t * kbd_task = task_create("kbd_server", 0, kbd_proc, 0,0,0,0);
     task_resume(kbd_task);
 }

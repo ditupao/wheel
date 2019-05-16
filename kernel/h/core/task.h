@@ -13,8 +13,13 @@
 // - kstack: used to execute syscall handler and exception handler
 // - ustack: used to execute application code under user mode
 typedef struct task {
-    regs_t      regs;           // arch-specific status
-    spin_t      lock;           // spinlock used in state-switching
+    // arch-specific status
+    regs_t      regs;
+
+    // task management
+    spin_t      lock;
+    dlnode_t    dl_task;
+    char        name[64];
 
     // scheduler specific fields
     u32         state;
@@ -32,8 +37,6 @@ typedef struct task {
     dlnode_t    dl_proc;        // node in process
     process_t * process;        // current process
 
-    // task management
-    dlnode_t    dl_task;
 } task_t;
 
 // task priorities
@@ -48,13 +51,14 @@ typedef struct task {
 #define TS_SUSPEND      0x04    // stopped on purpose, not on any q
 #define TS_ZOMBIE       0x08    // finished, but TCB still present
 
-extern task_t * task_create (int priority, void * proc,
+extern task_t * task_create (const char * name, int priority, void * proc,
                              void * a1, void * a2, void * a3, void * a4);
 extern void     task_exit   ();
 extern void     task_suspend();
 extern void     task_resume (task_t * tid);
 extern void     task_delay  (int ticks);
 extern void     task_wakeup (task_t * tid);
+extern void     task_dump   ();
 
 // requires: pool
 extern __INIT void task_lib_init();

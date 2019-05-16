@@ -107,9 +107,6 @@ static __INIT void parse_mmap(u8 * mmap_buf, u32 mmap_len) {
 // backup multiboot structures
 static __INITDATA mb_info_t mbi;
 
-// static __PERCPU   task_t * tid_temp;
-static __INITDATA task_t * tid_root;
-
 // forward declarations
 static void root_proc();
 
@@ -185,7 +182,6 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
-    // thiscpu_var(tid_temp) = &tcb_temp;
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
@@ -194,8 +190,8 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     atomic32_inc((u32 *) &cpu_activated);
 
     // start executing root task
-    tid_root = task_create(PRIORITY_NONRT, root_proc, 0,0,0,0);
-    task_resume(tid_root);
+    task_t * root = task_create("root", PRIORITY_NONRT, root_proc, 0,0,0,0);
+    task_resume(root);
 
     dbg_print("YOU CAN'T SEE THIS LINE!\n");
     while (1) {}
@@ -217,7 +213,6 @@ __INIT __NORETURN void sys_init_ap() {
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE };
-    // thiscpu_var(tid_temp) = &tcb_temp;
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 

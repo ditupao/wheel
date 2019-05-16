@@ -147,6 +147,7 @@ interrupt_stub:
     save_regs                       // save registers to current stack
     movq    %rax, %rdi              // rdi = vector number
     movq    %rsp, %rsi              // rsi = stack frame
+    movq    %rsp, %rbp              // save old stack pointer
 
     testl   $3, 0x88(%rsp)          // if come from user mode
     je      1f
@@ -164,7 +165,6 @@ interrupt_stub:
 2:
     pushq   $0                      // dummy return addr
     pushq   $0                      // dummy rbp value
-    movq    %rsp, %rbp
 
     movq    $isr_tbl, %rax
     andl    $0xff, %edi             // rdi < 256 (clear upper 32 bits)
@@ -172,13 +172,13 @@ interrupt_stub:
     sti
     call    * %rax
     cli
-    addq    $16, %rsp               // pop dummy return addr and rbp
+    movq    %rbp, %rsp              // switch back to old stack
 
     decl    %gs:(int_depth)
     cmpl    $0, %gs:(int_depth)     // if we're still inside ISR
-    jne     4f
-    // cmpl    $0, %gs:(no_preempt)    // if we've disabled preemption
-    // jne     3f
+    jne     4f                      // no need to switch stack and swapgs
+    cmpl    $0, %gs:(no_preempt)    // if we've disabled preemption
+    jne     3f                      // no task switch is performed
 
 return_to_task:
     movq    %gs:(tid_next), %rdi

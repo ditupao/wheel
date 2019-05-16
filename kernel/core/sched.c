@@ -153,10 +153,10 @@ void preempt_lock() {
     thiscpu32_inc(&no_preempt);
 }
 
-// re-enable task preemption, and perform task switch
+// re-enable task preemption
+// caller should invoke `task_switch`
 void preempt_unlock() {
     thiscpu32_dec(&no_preempt);
-    // task_switch();
 }
 
 #if 0
@@ -225,8 +225,8 @@ void sched_tick() {
 // initialize scheduler
 
 static void idle_proc() {
-    task_t * tid = thiscpu_var(tid_prev);
-    raw_spin_take(&tid->lock);
+    // lock current task and never give away
+    raw_spin_take(&thiscpu_var(tid_prev)->lock);
 
     while (1) {
         cpu_sleep();
@@ -234,6 +234,8 @@ static void idle_proc() {
 }
 
 __INIT void sched_lib_init() {
+    // this function is called before starting all cpu
+    // so we should use `cpu_installed` instead of `cpu_activated`
     for (int i = 0; i < cpu_installed; ++i) {
         percpu_var(i, tid_prev)   = NULL;
         percpu_var(i, tid_prev)   = NULL;
@@ -248,10 +250,12 @@ __INIT void sched_lib_init() {
             rdy->tasks[p] = DLLIST_INIT;
         }
 
-        task_t * idle = task_create(PRIORITY_IDLE, idle_proc, 0,0,0,0);
+        char name[] = "idle-x";
+        name[5] = '0' + i;
+        task_t * idle = task_create(name, PRIORITY_IDLE, idle_proc, 0,0,0,0);
         idle->state    = TS_READY;
+        idle->affinity = 1UL << i;
         idle->last_cpu = i;
         dl_push_tail(&rdy->tasks[PRIORITY_IDLE], &idle->dl_sched);
     }
 }
-

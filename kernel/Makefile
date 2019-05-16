@@ -14,8 +14,8 @@ OBJLIST :=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
 APPLIST :=  $(shell find $(APPDIR) -type f -name '*.app')
 
-CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -I../common -ffreestanding -Wall -Wextra
-CFLAGS  +=  -Werror=implicit -Werror=implicit-function-declaration -Wno-cast-function-type
+CFLAGS  :=  -c -g -std=c17 -Ih -Ih/arch/$(ARCH) -I../common -ffreestanding
+CFLAGS  +=  -Wall -Wextra -Werror=implicit -Wno-cast-function-type
 CFLAGS  +=  -DSYSCALL_DEF='<syscall.def>'
 DEPGEN   =  -MT $@ -MMD -MP -MF $(basename $@).t
 LFLAGS  :=  -nostdlib -lgcc -T arch/$(ARCH)/layout.ld -Wl,-Map,$(MAPFILE)

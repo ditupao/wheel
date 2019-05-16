@@ -6,19 +6,18 @@ int main(int argc, const char * argv[], const char * envp[]) {
         write(1, argv[i], 0);
         write(1, ".\n", 0);
     }
-    for (int i = 0; envp[i]; ++i) {
-        write(1, "-- got environment: ", 0);
-        write(1, envp[i], 0);
-        write(1, ".\n", 0);
-    }
-    write(1, "hello world from main.c.\n", 0);
 
     const char * new_argv[] = {
         "hello.app",
         "world",
         NULL
     };
+
+    write(1, "spawning hello.app:\n", 0);
     spawn_process(new_argv[0], new_argv, envp);
+
+    write(1, "dumping all tasks in the system.\n", 0);
+    magic();
 
     return 0;
 }

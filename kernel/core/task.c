@@ -1,12 +1,15 @@
 #include <wheel.h>
 
-static pool_t tcb_pool;
+// TODO: store real-time and non-rt tasks in different list?
+
+static pool_t   tcb_pool;
+static dllist_t tcb_list;
 
 //------------------------------------------------------------------------------
 // task operations
 
 // create new task
-task_t * task_create(int priority, void * proc,
+task_t * task_create(const char * name, int priority, void * proc,
                      void * a1, void * a2, void * a3, void * a4) {
     dbg_assert((0 <= priority) && (priority < PRIORITY_COUNT));
 
@@ -33,7 +36,12 @@ task_t * task_create(int priority, void * proc,
     // setup register info on the new stack
     usize vstk = (usize) phys_to_virt((usize) kstk << PAGE_SHIFT);
     regs_init(&tid->regs, vstk + PAGE_SIZE * 16, proc, a1, a2, a3, a4);
+
+    // TODO: lock tcb_list to prevent data racing
     tid->lock      = SPIN_INIT;
+    tid->dl_task   = DLNODE_INIT;
+    dl_push_tail(&tcb_list, &tid->dl_task);
+    strncpy(tid->name, name, 63);
 
     tid->state     = TS_SUSPEND;
     tid->priority  = priority;
@@ -78,6 +86,7 @@ static void task_cleanup(task_t * tid) {
 
     // TODO: signal parent for finish and wait
     // for the parent task to release this tcb
+    dl_remove(&tcb_list, &tid->dl_task);
     pool_obj_free(&tcb_pool, tid);
 }
 
@@ -159,9 +168,21 @@ void task_wakeup(task_t * tid) {
     }
 }
 
+void task_dump() {
+    // TODO: we need some sort of locking to protect tcb_list
+    dlnode_t * node = tcb_list.head;
+    while (node) {
+        task_t * tid = PARENT(node, task_t, dl_task);
+        dbg_print("--- task <%02d:%d> %x `%s`.\n",
+            tid->priority, tid->last_cpu, tid->state, tid->name);
+        node = node->next;
+    }
+}
+
 //------------------------------------------------------------------------------
 // module setup
 
 __INIT void task_lib_init() {
     pool_init(&tcb_pool, sizeof(task_t));
+    tcb_list = DLLIST_INIT;
 }

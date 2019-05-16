@@ -56,13 +56,13 @@ static void semaphore_timeout(semaphore_t * sem, task_t * tid) {
 // return ERROR if failed (might block)
 // this function cannot be called inside ISR
 int semaphore_take(semaphore_t * sem, int timeout) {
-    // preempt_lock();
-    u32 key = irq_spin_take(&sem->lock);
+    preempt_lock();
+    raw_spin_take(&sem->lock);
 
     if (sem->count) {
         --sem->count;
-        irq_spin_give(&sem->lock, key);
-        // preempt_unlock();
+        raw_spin_give(&sem->lock);
+        preempt_unlock();
         return OK;
     }
 
@@ -84,8 +84,8 @@ int semaphore_take(semaphore_t * sem, int timeout) {
 
     // release locks
     raw_spin_give(&tid->lock);
-    irq_spin_give(&sem->lock, key);
-    // preempt_unlock();
+    raw_spin_give(&sem->lock);
+    preempt_unlock();
 
     // pend here
     task_switch();

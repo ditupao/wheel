@@ -13,6 +13,6 @@ void tty_proc() {
 }
 
 __INIT void tty_lib_init() {
-    task_t * tty = task_create(PRIORITY_NONRT-1, tty_proc, 0,0,0,0);
+    task_t * tty = task_create("tty_server", PRIORITY_NONRT-1, tty_proc, 0,0,0,0);
     task_resume(tty);
 }

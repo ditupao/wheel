@@ -41,6 +41,7 @@ SECTIONS {
 
     .text ALIGN(0x1000) : AT(ADDR(.text) - KERNEL_VMA + KERNEL_LMA) {
         *(.text)
+        *(.text.*)
         _text_end = .;
     } :kernel =0x90
     .rodata ALIGN(0x1000) : AT(ADDR(.rodata) - KERNEL_VMA + KERNEL_LMA) {
@@ -50,10 +51,12 @@ SECTIONS {
     } :kernel =0
     .data ALIGN(0x1000) : AT(ADDR(.data) - KERNEL_VMA + KERNEL_LMA) {
         *(.data)
+        *(.data.*)
         _data_end = .;
     } :kernel =0
     .bss ALIGN(16) (NOLOAD) : AT(ADDR(.bss) - KERNEL_VMA + KERNEL_LMA) {
         *(.bss)
+        *(.bss.*)
         *(COMMON)
         _kernel_end = .;
     } :kernel

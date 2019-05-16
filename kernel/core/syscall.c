@@ -46,7 +46,7 @@ int do_wait(int subpid __UNUSED) {
 
 int do_spawn_thread(void * entry) {
     task_t * cur = thiscpu_var(tid_prev);
-    task_t * tid = task_create(cur->priority, thread_entry, entry, 0,0,0);
+    task_t * tid = task_create("new-thread", cur->priority, thread_entry, entry, 0,0,0);
     task_resume(tid);
     return 0;
 }
@@ -153,7 +153,7 @@ int do_spawn_process(const char * filename,
     dbg_assert((u_addr - (usize) k_envp[0]) == (usize) len_envp);
 
     // create new task, put it under the newly created process
-    task_t * tid = task_create(PRIORITY_NONRT, process_entry,
+    task_t * tid = task_create(filename, PRIORITY_NONRT, process_entry,
                                (void *) pid->entry, (void *) sp, k_argv, 0);
     dl_push_tail(&pid->tasks, &tid->dl_proc);
     regs_ctx_set(&tid->regs, pid->vm.ctx);
@@ -183,6 +183,7 @@ int do_write(int fd __UNUSED, const char * buf, size_t count __UNUSED) {
 }
 
 int do_magic() {
+    task_dump();
     return 0xdeadbeef;
 }
 

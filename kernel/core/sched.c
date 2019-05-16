@@ -76,8 +76,7 @@ static task_t * find_highest_task(ready_q_t * rdy) {
 // low level scheduling, task state switching
 // caller need to lock interrupt, or risk being switched-out
 // caller also need to lock target tid, or might be deleted by others
-// following operations need to be carried out when interrupts locked
-// after unlocking interrupts, call `task_switch` or `smp_reschedule` manually
+// after unlocking interrupt, call `task_switch` or `smp_reschedule` manually
 
 // add bits to `tid->state`, possibly stopping it, return old state.
 // this function only updates `tid`, `ready_q`, and `tid_next`.
@@ -159,35 +158,6 @@ void preempt_unlock() {
     thiscpu32_dec(&no_preempt);
 }
 
-#if 0
-static void sched_timeout(pend_q_t * pend_q, task_t * tid) {
-    //
-}
-
-// pend current task on given pend_q
-// this is a blocking function, return after woken up
-void sched_pend(pend_q_t * pend_q, int timeout) {
-    wdog_t   wd;
-    task_t * tid = thiscpu_var(tid_prev);
-    int      pri = tid->priority;
-    raw_spin_take(&tid->lock);
-    
-    sched_stop(tid, TS_PEND);
-    tid->ret_val = OK;
-    dl_push_tail(&pend_q->tasks[pri], &tid->dl_sched);
-    pend_q->priorities |= 1U << pri;
-
-    // create timeout watchdog
-    if (SEM_WAIT_FOREVER != timeout) {
-        wdog_init(&wd);
-        wdog_start(&wd, timeout, sched_timeout, pend_q, tid, 0,0);
-    }
-
-    // release locks
-    raw_spin_give(&tid->lock);
-}
-#endif
-
 // this function might be called during tick_advance
 // task state not changed, no need to lock current tid
 void sched_yield() {
@@ -228,6 +198,7 @@ static void idle_proc() {
     // lock current task and never give away
     raw_spin_take(&thiscpu_var(tid_prev)->lock);
 
+    // loop forever
     while (1) {
         cpu_sleep();
     }

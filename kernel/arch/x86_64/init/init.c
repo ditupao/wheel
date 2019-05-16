@@ -181,7 +181,7 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     syscall_lib_init();
 
     // dummy tcb, allocated on stack
-    task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    task_t tcb_temp = { .priority = PRIORITY_IDLE + 1 };
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
@@ -212,7 +212,7 @@ __INIT __NORETURN void sys_init_ap() {
     kernel_ctx_load();
 
     // dummy tcb, allocated on stack
-    task_t tcb_temp = { .priority = PRIORITY_IDLE };
+    task_t tcb_temp = { .priority = PRIORITY_IDLE + 1 };
     thiscpu_var(tid_prev) = &tcb_temp;
     thiscpu_var(tid_next) = &tcb_temp;
 
@@ -258,8 +258,9 @@ static void root_proc() {
 
         // during pre-kernel stage, each cpu use the same kernel stack
         // so we have to start each cpu one-by-one
-        // while (percpu_var(idx, tid_prev) == percpu_var(idx, tid_temp)) {
-        while (idx + 1 != cpu_activated) {
+        // while (idx + 1 != cpu_activated) {
+        while ((percpu_var(idx, tid_prev) == NULL) ||
+               (percpu_var(idx, tid_prev)->priority != PRIORITY_IDLE)) {
             tick_delay(10);
         }
     }
@@ -285,14 +286,3 @@ static void root_proc() {
     };
     do_spawn_process(argv[0], argv, envp);
 }
-
-// static void idle_proc() {
-//     // take spinlock and never give out
-//     // so this idle task can never be deleted
-//     task_t * tid = thiscpu_var(tid_prev);
-//     raw_spin_take(&tid->lock);
-
-//     while (1) {
-//         cpu_sleep();
-//     }
-// }

@@ -7,7 +7,8 @@ DEPLIST :=  $(patsubst %.c.o,%.c.d,$(filter %.c.o,$(OBJLIST)))
 
 LIBFILE :=  $(APPDIR)/libc.a
 
-CFLAGS  :=  -c -g -std=c99 -Ih -I../../common -ffreestanding
+CFLAGS  :=  -c -g -std=c99 -Ih -I../../common
+CFLAGS  +=  -ffreestanding -ffunction-sections -fdata-sections
 CFLAGS  +=  -DSYSCALL_DEF='<syscall.def>'
 DEPGEN   =  -MT $@ -MMD -MP -MF $(basename $@).t
 

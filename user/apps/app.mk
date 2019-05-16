@@ -10,9 +10,10 @@ OBJLIST ?=  $(patsubst %,$(OUTDIR)/%.o,$(SRCLIST))
 APPFILE ?=  $(APPDIR)/$(NAME).app
 MAPFILE ?=  $(OUTDIR)/$(NAME).map
 
-CFLAGS  :=  -c -g -std=c99 -I../../libc/h -I../../../common -ffreestanding
+CFLAGS  :=  -c -g -std=c99 -I../../libc/h -I../../../common
+CFLAGS  +=  -ffreestanding -ffunction-sections -fdata-sections
 CFLAGS  +=  -DSYSCALL_DEF='<syscall.def>'
-LFLAGS  :=  -nostdlib -L $(APPDIR) -lc -lgcc
+LFLAGS  :=  -nostdlib -L $(APPDIR) -lc -lgcc -Wl,--gc-sections
 
 build: $(APPFILE)
 

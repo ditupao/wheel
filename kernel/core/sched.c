@@ -2,8 +2,8 @@
 
 typedef struct ready_q {
     spin_t   lock;
-    u32      priorities;            // bit mask
     int      load;                  // number of tasks
+    u32      priorities;            // bit mask
     dllist_t tasks[PRIORITY_COUNT]; // protected by ready_q.lock
 } ready_q_t;
 
@@ -183,11 +183,12 @@ void sched_yield() {
 // so current task is not executing
 void sched_tick() {
     task_t * tid = thiscpu_var(tid_prev);
-    if (tid->priority != PRIORITY_IDLE) {
-        if (--tid->remaining <= 0) {
-            tid->remaining = tid->timeslice;
-            sched_yield();
-        }
+    if (tid->priority == PRIORITY_IDLE) {
+        return;
+    }
+    if (--tid->remaining <= 0) {
+        tid->remaining = tid->timeslice;
+        sched_yield();
     }
 }
 
@@ -214,8 +215,8 @@ __INIT void sched_lib_init() {
 
         ready_q_t * rdy = percpu_ptr(i, ready_q);
         rdy->lock       = SPIN_INIT;
-        rdy->priorities = 1U << 31; // idle task
         rdy->load       = 1;        // idle task
+        rdy->priorities = 1U << 31; // idle task
 
         for (int p = 0; p < PRIORITY_COUNT; ++p) {
             rdy->tasks[p] = DLLIST_INIT;

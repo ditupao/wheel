@@ -176,9 +176,6 @@ __INIT __NORETURN void sys_init_bsp(u32 ebx) {
     tick_lib_init();
     task_lib_init();
     sched_lib_init();
-    vmspace_lib_init();
-    process_lib_init();
-    syscall_lib_init();
 
     // dummy tcb, allocated on stack
     task_t tcb_temp = { .priority = PRIORITY_IDLE + 1 };
@@ -258,12 +255,16 @@ static void root_proc() {
 
         // during pre-kernel stage, each cpu use the same kernel stack
         // so we have to start each cpu one-by-one
-        // while (idx + 1 != cpu_activated) {
         while ((percpu_var(idx, tid_prev) == NULL) ||
-               (percpu_var(idx, tid_prev)->priority != PRIORITY_IDLE)) {
+               (percpu_var(idx, tid_prev)->priority > PRIORITY_IDLE)) {
             tick_delay(10);
         }
     }
+
+    // initialize the rest of kernel features
+    vmspace_lib_init();
+    process_lib_init();
+    syscall_lib_init();
 
     // initialize device driver(s)
     kbd_lib_init();     // drvs

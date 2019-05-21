@@ -173,12 +173,16 @@ int do_close(int fd __UNUSED) {
     return 0;
 }
 
-int do_read(int fd __UNUSED, const char * buf __UNUSED, size_t count __UNUSED) {
+int do_read(int fd __UNUSED, const char * buf, size_t count) {
+    iodev_t * dev = tty_dev_create();
+    dev->drv->read(dev, (u8 *) buf, count);
     return 0;
 }
 
-int do_write(int fd __UNUSED, const char * buf, size_t count __UNUSED) {
-    dbg_print(buf);
+int do_write(int fd __UNUSED, const char * buf, size_t count) {
+    // dbg_print(buf);
+    iodev_t * dev = tty_dev_create();
+    dev->drv->write(dev, (u8 *) buf, count);
     return 0;
 }
 

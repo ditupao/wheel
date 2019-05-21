@@ -1,6 +1,12 @@
 #include <system.h>
 
+void print(const char * s) {
+    int len;
+    for (len = 0; s[len]; ++len) {}
+    write(1, s, len);
+}
+
 int main(int argc, const char * argv[]) {
-    write(1, "hello world from hello.app!\n", 0);
+    print("hello world from hello.app!\n");
     return 0;
 }

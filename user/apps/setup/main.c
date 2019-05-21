@@ -1,10 +1,16 @@
 #include <system.h>
 
+void print(const char * s) {
+    int len;
+    for (len = 0; s[len]; ++len) {}
+    write(1, s, len);
+}
+
 int main(int argc, const char * argv[], const char * envp[]) {
     for (int i = 0; i < argc; ++i) {
-        write(1, "-- got argument: ", 0);
-        write(1, argv[i], 0);
-        write(1, ".\n", 0);
+        print("-- got argument: ");
+        print(argv[i]);
+        print(".\n");
     }
 
     const char * new_argv[] = {
@@ -13,11 +19,11 @@ int main(int argc, const char * argv[], const char * envp[]) {
         NULL
     };
 
-    write(1, "spawning hello.app:\n", 0);
+    print("spawning hello.app:\n");
     spawn_process(new_argv[0], new_argv, envp);
 
-    write(1, "dumping all tasks in the system.\n", 0);
-    magic();
+    // print("dumping all tasks in the system.\n");
+    // magic();
 
     return 0;
 }

@@ -271,6 +271,9 @@ static void root_proc() {
     tty_lib_init();     // drvs
     ps2kbd_dev_init();  // arch-drvs
 
+    // create tty device for stdin to work
+    tty_dev_create();
+
     dbg_print("content of ramfs.tar:\n");
     tar_dump(&_ramfs_addr);
 

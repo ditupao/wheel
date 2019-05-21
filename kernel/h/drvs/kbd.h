@@ -64,7 +64,6 @@ typedef enum keycode {
 } keycode_t;
 
 extern pipe_t * kbd_pipe;
-extern pipe_t * tty_pipe;
 
 // requires: multi-tasking
 extern __INIT void kbd_lib_init();

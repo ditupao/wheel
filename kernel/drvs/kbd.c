@@ -1,7 +1,7 @@
 #include <wheel.h>
 
 pipe_t * kbd_pipe = NULL;   // pipe for transmitting key code
-pipe_t * tty_pipe = NULL;   // pipe for transmitting ascii
+// pipe_t * tty_pipe = NULL;   // pipe for transmitting ascii
 
 // keyboard lock content, scroll lock is omitted
 static int kbd_capslock = 0;
@@ -20,9 +20,9 @@ static const char syms[] = ")!@#$%^&*(";
 
 // send converted ascii to pipe
 static void send_ascii(char c) {
-    // TODO: send to another pipe
-    // dbg_print("%c", c);
-    pipe_write(tty_pipe, (u8 *) &c, 1);
+    if (NULL != tty_pipe) {
+        pipe_write(tty_pipe, (u8 *) &c, 1);
+    }
 }
 
 static void handle_keycode(keycode_t key, int release) {
@@ -171,7 +171,6 @@ static void kbd_proc() {
 
 __INIT void kbd_lib_init() {
     kbd_pipe = pipe_create();
-    tty_pipe = pipe_create();
-    task_t * kbd_task = task_create("kbd_server", 0, kbd_proc, 0,0,0,0);
+    task_t * kbd_task = task_create("kbd-server", 0, kbd_proc, 0,0,0,0);
     task_resume(kbd_task);
 }

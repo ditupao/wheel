@@ -19,6 +19,12 @@ static void thread_entry(void * entry) {
 static void process_entry(void * entry, void * sp) {
     dbg_assert(((usize) sp % sizeof(usize)) == 0);
     dbg_print("new process running on cpu-%d, ip=%llx sp=%llx:\n", cpu_index(), entry, sp);
+
+    fdesc_t * tty = ios_open("/dev/tty", IOS_READ|IOS_WRITE);
+    process_t * proc = thiscpu_var(tid_prev)->process;
+    proc->std[0] = tty;
+    proc->std[1] = tty;
+
     return_to_user((usize) entry, (usize) sp);
 }
 
@@ -173,17 +179,16 @@ int do_close(int fd __UNUSED) {
     return 0;
 }
 
-int do_read(int fd __UNUSED, const char * buf, size_t count) {
-    iodev_t * dev = tty_dev_create();
-    dev->drv->read(dev, (u8 *) buf, count);
-    return 0;
+fdesc_t std;
+
+int do_read(int fd __UNUSED, void * buf, size_t count) {
+    std.dev = tty_dev_create();
+    return ios_read(&std, (u8 *) buf, count);
 }
 
-int do_write(int fd __UNUSED, const char * buf, size_t count) {
-    // dbg_print(buf);
-    iodev_t * dev = tty_dev_create();
-    dev->drv->write(dev, (u8 *) buf, count);
-    return 0;
+int do_write(int fd __UNUSED, const void * buf, size_t count) {
+    std.dev = tty_dev_create();
+    return ios_write(&std, (const u8 *) buf, count);
 }
 
 int do_magic() {

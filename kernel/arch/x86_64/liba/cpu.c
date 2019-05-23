@@ -302,6 +302,6 @@ usize regs_ret_get(regs_t * regs) {
     return (usize) regs->rsp->rax;
 }
 
-void smp_reschedule(u32 cpu) {
+void smp_reschedule(int cpu) {
     loapic_emit_ipi(cpu, VECNUM_RESCHED);
 }

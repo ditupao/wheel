@@ -7,5 +7,5 @@ DEFINE_SYSCALL(4,   wait,           int pid)
 
 DEFINE_SYSCALL(11,  open,           const char * filename)
 DEFINE_SYSCALL(12,  close,          int fd)
-DEFINE_SYSCALL(13,  read,           int fd, const char * buf, size_t count)
-DEFINE_SYSCALL(14,  write,          int fd, const char * buf, size_t count)
+DEFINE_SYSCALL(13,  read,           int fd,       void * buf, size_t count)
+DEFINE_SYSCALL(14,  write,          int fd, const void * buf, size_t count)

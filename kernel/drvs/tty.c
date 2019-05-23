@@ -1,98 +1,40 @@
 #include <wheel.h>
 
-// pseudo-terminal device driver
-
-int fd_read(fdesc_t * fd, char * buf, int len) {
-    iodrv_t * drv = fd->dev->drv;
-    // TODO: check fdesc mode, whether we have read access
-    return drv->read(fd->dev, buf, len);
-}
-
-int fd_write(fdesc_t * fd, char * buf, int len) {
-    iodrv_t * drv = fd->dev->drv;
-    // TODO: check fdesc mode, whether we have read access
-    return drv->write(fd->dev, buf, len);
-}
-
-//------------------------------------------------------------------------------
-
 // for pseudo terminal device, we only need to keep
 // input data buffer, output is not buffered (?)
 typedef struct tty_dev {
-    iodev_t  dev;           // header
-    int      echo;
-    pglist_t pages;         // input data buffer
-    int      roffset;       // offset within pages.head [0, PAGE_SIZE-1]
-    int      woffset;       // offset within pages.tail [0, PAGE_SIZE-1]
+    iodev_t   dev;      // header
+    int       echo;
+    fifobuf_t fifo;     // input buffer
 } tty_dev_t;
 
 // some process is reading from the tty device
 // return how many bytes read
 static usize tty_buff_read(tty_dev_t * tty, u8 * buf, usize len) {
-    usize total_len = len;
-
-    while (len) {
-        if (tty->pages.head == tty->pages.tail) {
-            // this is the last page, make sure read_offset
-            // does not exceeds write_offset
-            pfn_t head = tty->pages.head;
-            u8  * addr = phys_to_virt((usize) head << PAGE_SHIFT);
-            usize copy = MIN(len, (usize) tty->woffset - tty->roffset);
-            memcpy(buf, addr + tty->roffset, copy);
-            tty->roffset += copy;
-            buf          += copy;
-            len          -= copy;
-
-            // there's nothing more to read
-            return total_len - len;
-        }
-
-        // roffset and woffset in different pages
-        pfn_t head = tty->pages.head;
-        u8  * addr = phys_to_virt((usize) head << PAGE_SHIFT);
-        usize copy = MIN(len, (usize) PAGE_SIZE - tty->roffset);
-        memcpy(buf, addr + tty->roffset, copy);
-        tty->roffset += copy;
-        buf          += copy;
-        len          -= copy;
-
-        // free head page if all content have been read
-        if (PAGE_SIZE == tty->roffset) {
-            head = pglist_pop_head(&tty->pages);
-            page_block_free(head, 0);
-            tty->roffset = 0;
-        }
-    }
-
-    return total_len;
+    return fifobuf_read(&tty->fifo, buf, len);
 }
 
 // we got user input from keyboard, put it in the current tty
-static void tty_buff_write(tty_dev_t * tty, u8 * buf, usize len) {
-    while (len) {
-        // write to `pages.tail + write_offset`
-        pfn_t tail = tty->pages.tail;
-        u8  * addr = phys_to_virt((usize) tail << PAGE_SHIFT);
-        usize copy = MIN(len, (usize) PAGE_SIZE - tty->woffset);
-        memcpy(addr + tty->woffset, buf, copy);
-        tty->woffset += copy;
-        buf          += copy;
-        len          -= copy;
+static usize tty_buff_write(tty_dev_t * tty, u8 * buf, usize len) {
+    usize ret = fifobuf_write(&tty->fifo, buf, len);
 
-        // allocate new space if current tail page is used up
-        if (PAGE_SIZE == tty->woffset) {
-            tail = page_block_alloc(ZONE_NORMAL|ZONE_DMA, 0);
-            pglist_push_tail(&tty->pages, tail);
-            page_array[tail].block = 1;
-            page_array[tail].order = 0;
-            page_array[tail].type  = PT_PIPE;
-            tty->woffset = 0;
-        }
+    // // see if there's any task pending for input
+    // dlnode_t * node = tty->dev.readers.head;
+    // while (node != NULL) {
+    //     fdesc_t * desc = PARENT(node, fdesc_t, dl_reader);
+    //     sched_cont(desc->tid, TS_PEND);
+    //     node = node->next;
+    // }
+
+    if (tty->dev.pended) {
+        sched_cont(tty->dev.pended, TS_PEND);
     }
+
+    return ret;
 }
 
-void tty_dev_open() {
-    //
+fdesc_t * tty_dev_open(iodev_t * dev __UNUSED) {
+    return NULL;
 }
 
 void tty_dev_close() {
@@ -100,14 +42,16 @@ void tty_dev_close() {
 }
 
 // called by read(stdin)
-int tty_dev_read(iodev_t * dev, char * buf, int len) {
-    return tty_buff_read((tty_dev_t *) dev, (u8 *) buf, len);
+usize tty_dev_read(iodev_t * dev, u8 * buf, usize len) {
+    return tty_buff_read((tty_dev_t *) dev, buf, len);
 }
 
 // called by write(stdout)
-int tty_dev_write(iodev_t * dev __UNUSED, char * buf, int len) {
-    buf[len] = '\0';
-    dbg_print(buf);
+usize tty_dev_write(iodev_t * dev __UNUSED, const u8 * buf, usize len) {
+    char * mbuf = (char *) buf;
+
+    mbuf[len] = '\0';
+    dbg_print((const char *) mbuf);
     return len;
 }
 
@@ -139,19 +83,11 @@ iodev_t * tty_dev_create() {
     tty.dev.drv     = &drv;
     tty.dev.readers = DLLIST_INIT;
     tty.dev.writers = DLLIST_INIT;
+    tty.dev.pended  = NULL;
 
     // init custom fields
     tty.echo    = 1;
-    tty.pages   = PGLIST_INIT;
-    tty.roffset = 0;
-    tty.woffset = 0;
-
-    // must have at least one page block
-    pfn_t pn = page_block_alloc(ZONE_NORMAL|ZONE_DMA, 0);
-    page_array[pn].block = 1;
-    page_array[pn].order = 0;
-    page_array[pn].type  = PT_PIPE;
-    pglist_push_tail(&tty.pages, pn);
+    fifobuf_init(&tty.fifo);
 
     // TODO: add this device to the global tty list, so that we can
     // track which tty is the current one. Also we can know which tty
@@ -161,6 +97,11 @@ iodev_t * tty_dev_create() {
     return (iodev_t *) &tty;
 }
 
+// this task is used to connect keyboard input with tty
+// it copies data from tty_pipe, and write to tty_device
+// but we can make it better
+// reconnect tty_pipe to tty, so that every time ps2 keyboard
+// driver writes to tty_pipe, it is actually writing to tty device
 static void tty_proc() {
     static char buf[1024];
     while (1) {

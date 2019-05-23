@@ -18,6 +18,7 @@
 #include <mem/pool.h>
 #include <mem/vmspace.h>
 
+#include <drvs/ios.h>
 #include <drvs/kbd.h>
 #include <drvs/tty.h>
 
@@ -27,6 +28,7 @@
 
 #include <libk/list.h>
 #include <libk/rbtree.h>
+#include <libk/fifobuf.h>
 
 #include <libk/spin.h>
 #include <libk/elf64.h>

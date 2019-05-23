@@ -3,6 +3,7 @@
 
 #include <base.h>
 #include <mem/vmspace.h>
+#include <drvs/ios.h>
 #include <libk/spin.h>
 #include <libk/list.h>
 
@@ -14,6 +15,7 @@ typedef struct process {
     usize       entry;
     dllist_t    tasks;  // (double linked list) child tasks
     vmspace_t   vm;     // virtual address space, and page table
+    fdesc_t   * std[3];
 } process_t;
 
 extern process_t * process_create();

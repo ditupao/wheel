@@ -126,7 +126,7 @@ typedef struct elf64_sym {
 // dynamic entry
 
 typedef struct elf64_dyn {
-    i64 d_tag;
+    s64 d_tag;
     union {
         u64 d_val;
         u64 d_ptr;

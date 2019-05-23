@@ -266,6 +266,8 @@ static void root_proc() {
     process_lib_init();
     syscall_lib_init();
 
+    ios_lib_init();
+
     // initialize device driver(s)
     kbd_lib_init();     // drvs
     tty_lib_init();     // drvs

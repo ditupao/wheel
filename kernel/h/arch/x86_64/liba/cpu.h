@@ -185,6 +185,6 @@ extern void  regs_ctx_set  (regs_t * regs, usize ctx);
 extern usize regs_ctx_get  (regs_t * regs);
 extern void  regs_ret_set  (regs_t * regs, usize val);
 extern usize regs_ret_get  (regs_t * regs);
-extern void  smp_reschedule(u32 cpu);
+extern void  smp_reschedule(int cpu);
 
 #endif // ARCH_X86_64_LIBA_CPU_H

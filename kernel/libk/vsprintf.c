@@ -50,7 +50,7 @@ static char * fmt_number(char * buf, char * end, u64 num, int base, u32 flags, i
     char locase = (flags & FLG_LOWER) ? 0x20 : 0;
     char sign = 0;
     if (flags & FLG_SIGN) {
-        if ((i64) num < 0) {
+        if ((s64) num < 0) {
             sign = '-';
             --width;
         } else if (flags & FLG_PLUS) {
@@ -321,7 +321,7 @@ int vsnprintf(char * buf, usize size, const char * fmt, va_list args) {
             break;
         case 'L':
             if (flags & FLG_SIGN) {
-                num = va_arg(args, i64);
+                num = va_arg(args, s64);
             } else {
                 num = va_arg(args, u64);
             }

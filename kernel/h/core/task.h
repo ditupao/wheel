@@ -3,11 +3,12 @@
 
 #include <base.h>
 #include <mem/page.h>
-#include <mem/vmspace.h>
-#include <core/process.h>
 #include <libk/spin.h>
 #include <libk/list.h>
 #include <libk/rbtree.h>
+
+typedef struct vmrange vmrange_t;
+typedef struct process process_t;
 
 // task control block
 // - kstack: used to execute syscall handler and exception handler

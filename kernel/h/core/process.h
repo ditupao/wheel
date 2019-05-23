@@ -3,9 +3,10 @@
 
 #include <base.h>
 #include <mem/vmspace.h>
-#include <drvs/ios.h>
 #include <libk/spin.h>
 #include <libk/list.h>
+
+typedef struct fdesc fdesc_t;
 
 // TODO: use double linked list for pages?
 //       so that we can free memory during process lifetime.

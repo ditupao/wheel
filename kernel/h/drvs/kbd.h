@@ -2,7 +2,8 @@
 #define DRVS_KBD_H
 
 #include <base.h>
-#include <core/pipe.h>
+
+typedef struct pipe pipe_t;
 
 typedef enum keycode {
     KEY_RESERVED,

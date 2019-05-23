@@ -2,7 +2,8 @@
 #define LIBK_ELF64_H
 
 #include <base.h>
-#include <core/process.h>
+
+typedef struct process process_t;
 
 //------------------------------------------------------------------------------
 // elf file header

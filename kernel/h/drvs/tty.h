@@ -2,7 +2,9 @@
 #define DRVS_TTY_H
 
 #include <base.h>
-#include <core/pipe.h>
+
+typedef struct pipe  pipe_t;
+typedef struct iodev iodev_t;
 
 extern pipe_t * tty_pipe;   // for input
 

@@ -225,7 +225,7 @@ __INIT void loapic_dev_init() {
 }
 
 // send init IPI to the target cpu
-__INIT void loapic_emit_init(u32 cpu) {
+__INIT void loapic_emit_init(int cpu) {
     u32 icr_hi = ((u32) loapic_devs[cpu].apic_id << 24) & 0xff000000;
     u32 icr_lo = LOAPIC_INIT | LOAPIC_EDGE | LOAPIC_ASSERT;
     write32(loapic_base + LOAPIC_ICR_HI, icr_hi);
@@ -233,7 +233,7 @@ __INIT void loapic_emit_init(u32 cpu) {
 }
 
 // send startup IPI to the target cpu
-__INIT void loapic_emit_sipi(u32 cpu, u32 vec) {
+__INIT void loapic_emit_sipi(int cpu, int vec) {
     u32 icr_hi = ((u32) loapic_devs[cpu].apic_id << 24) & 0xff000000;
     u32 icr_lo = (vec & 0xff) | LOAPIC_STARTUP | LOAPIC_EDGE | LOAPIC_ASSERT;
     write32(loapic_base + LOAPIC_ICR_HI, icr_hi);

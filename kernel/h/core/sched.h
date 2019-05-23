@@ -2,7 +2,8 @@
 #define CORE_SCHED_H
 
 #include <base.h>
-#include <core/task.h>
+
+typedef struct task task_t;
 
 typedef struct pend_q {
     u32      priorities;            // bit mask

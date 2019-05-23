@@ -2,7 +2,9 @@
 #define ARCH_X86_64_LIBA_IOAPIC_H
 
 #include <base.h>
-#include "acpi.h"
+
+typedef struct madt_ioapic       madr_ioapic_t;
+typedef struct madt_int_override madt_int_override_t;
 
 extern int  ioapic_irq_to_gsi(int irq);
 extern int  ioapic_gsi_to_vec(int gsi);

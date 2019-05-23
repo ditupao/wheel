@@ -16,8 +16,8 @@ __PERCPU task_t * tid_next;        // protected by ready_q.lock
 //------------------------------------------------------------------------------
 // helper function
 
-// find the cpu with lowest current priority,
-// if multiple cpu have the lowest priority, then find the one with less load
+// find the cpu with lowest current priority, if multiple cpu have
+// the lowest priority, then find the one with least load.
 // prefer original cpu
 static int find_lowest_cpu(task_t * tid) {
     int lowest_cpu;

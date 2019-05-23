@@ -17,19 +17,7 @@ static usize tty_buff_read(tty_dev_t * tty, u8 * buf, usize len) {
 // we got user input from keyboard, put it in the current tty
 static usize tty_buff_write(tty_dev_t * tty, u8 * buf, usize len) {
     usize ret = fifobuf_write(&tty->fifo, buf, len);
-
-    // // see if there's any task pending for input
-    // dlnode_t * node = tty->dev.readers.head;
-    // while (node != NULL) {
-    //     fdesc_t * desc = PARENT(node, fdesc_t, dl_reader);
-    //     sched_cont(desc->tid, TS_PEND);
-    //     node = node->next;
-    // }
-
-    if (tty->dev.pended) {
-        sched_cont(tty->dev.pended, TS_PEND);
-    }
-
+    ios_notify_readers((iodev_t *) tty);
     return ret;
 }
 
@@ -66,7 +54,8 @@ pipe_t * tty_pipe = NULL;
 
 // TODO: create infrastructure for io driver and device creation, like
 //       io_driver_regist()
-//       io_device_create()
+//       io_device_create("/dev/tty")
+//       vfs_node_regist("/dev/tty", dev)
 
 iodev_t * tty_dev_create() {
     if (tty_dev_created) {

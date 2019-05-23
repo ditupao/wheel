@@ -5,12 +5,12 @@ static pool_t fdesc_pool;
 
 fdesc_t * ios_open(const char * filename, int mode) {
     dbg_print("opening file %s.\n", filename);
+
     iodev_t * dev = tty_dev_create();
     fdesc_t * fd  = (fdesc_t *) pool_obj_alloc(&fdesc_pool);
     fd->dev       = dev;
-    fd->tid       = thiscpu_var(tid_prev);
+    fd->tid       = NULL;
     fd->mode      = mode;
-    fd->state     = 0;
     fd->dl_reader = DLNODE_INIT;
     fd->dl_writer = DLNODE_INIT;
 
@@ -22,6 +22,26 @@ fdesc_t * ios_open(const char * filename, int mode) {
     }
 
     return fd;
+}
+
+// clone a new descriptor from the descriptor of the parent process
+// this function should be called in the child process
+fdesc_t * ios_fork(fdesc_t * fd) {
+    fdesc_t * fork  = (fdesc_t *) pool_obj_alloc(&fdesc_pool);
+    fork->dev       = fd->dev;
+    fork->tid       = NULL;
+    fork->mode      = fd->mode;
+    fork->dl_reader = DLNODE_INIT;
+    fork->dl_writer = DLNODE_INIT;
+
+    if (fork->mode & IOS_READ) {
+        dl_insert_before(&fork->dev->readers, &fork->dl_reader, &fd->dl_reader);
+    }
+    if (fork->mode & IOS_WRITE) {
+        dl_insert_before(&fork->dev->writers, &fork->dl_writer, &fd->dl_writer);
+    }
+
+    return fork;
 }
 
 void ios_close(fdesc_t * fd) {
@@ -39,9 +59,14 @@ usize ios_read(fdesc_t * fd, u8 * buf, usize len) {
     // no need to prepare waiter struct
     iodev_t * dev = fd->dev;
     iodrv_t * drv = dev->drv;
+    task_t  * tid = thiscpu_var(tid_prev);
 
     if (0 == len) {
         return 0;
+    }
+
+    if (0 == (fd->mode & IOS_READ)) {
+        return -1;
     }
 
     // this function cannot be called inside ISR
@@ -60,11 +85,12 @@ usize ios_read(fdesc_t * fd, u8 * buf, usize len) {
         }
 
         // cannot read any information, pend current task
-        task_t * self = thiscpu_var(tid_prev);
-        dev->pended = self;
-        sched_stop(self, TS_PEND);
+        fd->tid = tid;
+        raw_spin_take(&tid->lock);
+        sched_stop(tid, TS_PEND);
+        raw_spin_give(&tid->lock);
         task_switch();
-        dev->pended = NULL;
+        fd->tid = NULL;
     }
 }
 
@@ -73,9 +99,14 @@ usize ios_write(fdesc_t * fd, const u8 * buf, usize len) {
     // no need to create waiter object on stack
     iodev_t * dev = fd->dev;
     iodrv_t * drv = dev->drv;
+    task_t  * tid = thiscpu_var(tid_prev);
 
     if (0 == len) {
         return 0;
+    }
+
+    if (0 == (fd->mode & IOS_WRITE)) {
+        return -1;
     }
 
     // this function cannot be called inside ISR
@@ -93,54 +124,55 @@ usize ios_write(fdesc_t * fd, const u8 * buf, usize len) {
             return ret;
         }
 
-        // cannot write even on byte, pend current task
-        task_t * self = thiscpu_var(tid_prev);
-        dev->pended = self;
-        sched_stop(self, TS_PEND);
+        // cannot write even one byte, pend current task
+        fd->tid = tid;
+        raw_spin_take(&tid->lock);
+        sched_stop(tid, TS_PEND);
+        raw_spin_give(&tid->lock);
         task_switch();
-        dev->pended = NULL;
+        fd->tid = NULL;
     }
 }
 
 void ios_notify_readers(iodev_t * dev) {
-    dlnode_t * node = dev->readers.head;
-    while (node) {
+    for (dlnode_t * node = dev->readers.head; node; node = node->next) {
         fdesc_t * fd  = PARENT(node, fdesc_t, dl_reader);
         task_t  * tid = fd->tid;
-        int       cpu = tid->last_cpu;
+
+        if (NULL == tid) {
+            continue;
+        }
 
         raw_spin_take(&tid->lock);
         sched_cont(tid, TS_PEND);
         raw_spin_give(&tid->lock);
 
-        if (cpu_index() == cpu) {
+        if (cpu_index() == tid->last_cpu) {
             task_switch();
         } else {
-            smp_reschedule(cpu);
+            smp_reschedule(tid->last_cpu);
         }
-
-        node = node->next;
     }
 }
 
 void ios_notify_writers(iodev_t * dev) {
-    dlnode_t * node = dev->writers.head;
-    while (node) {
+    for (dlnode_t * node = dev->writers.head; node; node = node->next) {
         fdesc_t * fd  = PARENT(node, fdesc_t, dl_writer);
         task_t  * tid = fd->tid;
-        int       cpu = tid->last_cpu;
+
+        if (NULL == tid) {
+            continue;
+        }
 
         raw_spin_take(&tid->lock);
         sched_cont(tid, TS_PEND);
         raw_spin_give(&tid->lock);
 
-        if (cpu_index() == cpu) {
+        if (cpu_index() == tid->last_cpu) {
             task_switch();
         } else {
-            smp_reschedule(cpu);
+            smp_reschedule(tid->last_cpu);
         }
-
-        node = node->next;
     }
 }
 

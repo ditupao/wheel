@@ -11,7 +11,7 @@ int main(int argc, const char * argv[]) {
     print("try typing something:\n");
 
     char buf[64];
-    int len = read(1, buf, 32);
+    int len = read(0, buf, 32);
     buf[len] = '\0';
 
     char * s = "we got XX bytes: ";
@@ -22,7 +22,7 @@ int main(int argc, const char * argv[]) {
     print("\n");
 
     print("try typing something:\n");
-    len = read(1, buf, 32);
+    len = read(0, buf, 32);
     buf[len] = '\0';
 
     s[7] = '0' + (len / 10);

@@ -28,9 +28,8 @@ struct iodev {
 // file descriptor, tasks' holder to an opened file
 struct fdesc {
     iodev_t * dev;          // which device we've opened
-    task_t  * tid;          // opened by which task
-    int       mode;         // access mode, RO/WO/RW
-    int       state;        // normal, waiting to read, waiting to write
+    task_t  * tid;          // not NULL only if pending
+    int       mode;         // open mode, RO/WO/RW
     dlnode_t  dl_reader;    // node in the readers list
     dlnode_t  dl_writer;    // node in the writers list
 };
@@ -39,6 +38,7 @@ struct fdesc {
 #define IOS_WRITE   2
 
 extern fdesc_t * ios_open (const char * filename, int mode);
+extern fdesc_t * ios_fork (fdesc_t * fd);
 extern void      ios_close(fdesc_t * fd);
 extern usize     ios_read (fdesc_t * fd,       u8 * buf, usize len);
 extern usize     ios_write(fdesc_t * fd, const u8 * buf, usize len);

@@ -20,10 +20,9 @@ static void process_entry(void * entry, void * sp) {
     dbg_assert(((usize) sp % sizeof(usize)) == 0);
     dbg_print("new process running on cpu-%d, ip=%llx sp=%llx:\n", cpu_index(), entry, sp);
 
-    fdesc_t * tty = ios_open("/dev/tty", IOS_READ|IOS_WRITE);
     process_t * proc = thiscpu_var(tid_prev)->process;
-    proc->std[0] = tty;
-    proc->std[1] = tty;
+    proc->std[0] = ios_open("/dev/tty", IOS_READ);  // stdin
+    proc->std[1] = ios_open("/dev/tty", IOS_WRITE); // stdout
 
     return_to_user((usize) entry, (usize) sp);
 }
@@ -37,8 +36,13 @@ int do_unsupported() {
 }
 
 int do_exit(int exitcode) {
-    task_t * self = thiscpu_var(tid_prev);
+    task_t    * self = thiscpu_var(tid_prev);
+    process_t * proc = self->process;
+
     self->ret_val = exitcode;
+    ios_close(proc->std[0]);
+    ios_close(proc->std[1]);
+
     task_exit();
 
     dbg_print("[panic] task_exit() returned!\n");
@@ -179,16 +183,14 @@ int do_close(int fd __UNUSED) {
     return 0;
 }
 
-fdesc_t std;
-
-int do_read(int fd __UNUSED, void * buf, size_t count) {
-    std.dev = tty_dev_create();
-    return ios_read(&std, (u8 *) buf, count);
+int do_read(int fd, void * buf, size_t count) {
+    process_t * proc = thiscpu_var(tid_prev)->process;
+    return ios_read(proc->std[fd], (u8 *) buf, count);
 }
 
-int do_write(int fd __UNUSED, const void * buf, size_t count) {
-    std.dev = tty_dev_create();
-    return ios_write(&std, (const u8 *) buf, count);
+int do_write(int fd, const void * buf, size_t count) {
+    process_t * proc = thiscpu_var(tid_prev)->process;
+    return ios_write(proc->std[fd], (const u8 *) buf, count);
 }
 
 int do_magic() {

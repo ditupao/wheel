@@ -6,30 +6,33 @@ void print(const char * s) {
     write(1, (void *) s, len);
 }
 
+void gets(char * s, int len) {
+    while (len) {
+        size_t got = read(0, s, len);
+        for (int i = 0; i < got; ++i) {
+            if (s[i] == '\n') {
+                s[i] = '\0';
+                return;
+            }
+        }
+
+        s   += got;
+        len -= got;
+    }
+
+    s[-1] = '\0';
+}
+
 int main(int argc, const char * argv[]) {
-    print("hello world from hello.app!\n");
-    print("try typing something:\n");
-
     char buf[64];
-    int len = read(0, buf, 32);
-    buf[len] = '\0';
 
-    char * s = "we got XX bytes: ";
-    s[7] = '0' + (len / 10);
-    s[8] = '0' + (len % 10);
-    print(s);
+    print("hello world from hello.app!\n");
+    print("try typing something: ");
+
+    gets(buf, 64);
+    print("we got: ");
     print(buf);
-    print("\n");
-
-    print("try typing something:\n");
-    len = read(0, buf, 32);
-    buf[len] = '\0';
-
-    s[7] = '0' + (len / 10);
-    s[8] = '0' + (len % 10);
-    print(s);
-    print(buf);
-    print("\n");
+    print(".\n");
 
     return 0;
 }

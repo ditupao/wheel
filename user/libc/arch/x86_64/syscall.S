@@ -14,11 +14,11 @@ syscall_stub:
     popq    %rbx
     ret
 
-#define DEFINE_SYSCALL(id, name, ...)   \
-.global name;                           \
-.type name,@function;                   \
-name:;                                  \
-    movl    $ id, %eax;                 \
+#define DEFINE_SYSCALL(i, ftype, name, ...) \
+.global name;                               \
+.type name,@function;                       \
+name:;                                      \
+    movl    $ i, %eax;                      \
     jmp     syscall_stub
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL

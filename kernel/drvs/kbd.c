@@ -161,7 +161,6 @@ static void handle_keycode(keycode_t key, int release) {
 }
 
 static void kbd_proc() {
-    dbg_print("keyboard-server started...\r\n");
     while (1) {
         u32 encoded;
         pipe_read(kbd_pipe, (u8 *) &encoded, 4);

@@ -3,8 +3,8 @@
 static pool_t iodev_pool;
 static pool_t fdesc_pool;
 
-fdesc_t * ios_open(const char * filename, int mode) {
-    dbg_print("opening file %s.\n", filename);
+fdesc_t * ios_open(const char * filename __UNUSED, int mode) {
+    // dbg_print("opening file %s.\n", filename);
 
     iodev_t * dev = tty_dev_create();
     fdesc_t * fd  = (fdesc_t *) pool_obj_alloc(&fdesc_pool);

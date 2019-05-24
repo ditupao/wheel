@@ -11,7 +11,8 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-#define DEFINE_SYSCALL(id, name, ...) extern int name (__VA_ARGS__);
+#define DEFINE_SYSCALL(i, type, name, ...) \
+    extern type name (__VA_ARGS__);
 #include SYSCALL_DEF
 #undef DEFINE_SYSCALL
 

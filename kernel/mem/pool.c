@@ -16,7 +16,7 @@ void pool_init(pool_t * pool, u32 obj_size) {
     }
 
     if (obj_size > (PAGE_SIZE / 8)) {
-        dbg_print("pool obj-size too large!\n");
+        dbg_print("[panic] pool obj-size too large!\n");
         return;
     }
 
@@ -98,16 +98,14 @@ void * pool_obj_alloc(pool_t * pool) {
 
 // return an object to the pool, add to corresponding slab
 void pool_obj_free(pool_t * pool, void * obj) {
-    u8 *  va   = (u8 *) ((usize) obj & ~(PAGE_SIZE - 1));
-    usize pa   = virt_to_phys(va);
-    pfn_t slab = (pfn_t) (pa >> PAGE_SHIFT);
+    pfn_t slab = (pfn_t) (virt_to_phys(obj) >> PAGE_SHIFT);
 
     dbg_assert(PT_POOL == page_array[slab].type);
     dbg_assert(((usize) obj & (PAGE_SIZE - 1)) % pool->obj_size == 0);
 
     // add object to the freelist, and substract 1 from inuse
     * (u32 *) obj = page_array[slab].objects;
-    page_array[slab].objects = (u32) ((u8 *) obj - va);
+    page_array[slab].objects = (u16) ((usize) obj & (PAGE_SIZE - 1));
     page_array[slab].inuse  -= 1;
 
     if (NO_OBJ == * (u32 *) obj) {

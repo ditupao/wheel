@@ -276,8 +276,8 @@ static void root_proc() {
     // create tty device for stdin to work
     tty_dev_create();
 
-    dbg_print("content of ramfs.tar:\n");
-    tar_dump(&_ramfs_addr);
+    // dbg_print("content of ramfs.tar:\n");
+    // tar_dump(&_ramfs_addr);
 
     const char * argv[] = {
         "setup.app",

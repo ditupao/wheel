@@ -1,18 +1,18 @@
 #include <wheel.h>
 
-syscall_proc_t syscall_tbl[SYSCALL_NUM_COUNT];
+void * syscall_tbl[SYSCALL_NUM_COUNT];
 
 // entry of the newly spawned thread, old vmspace, start in kernel mode
 static void thread_entry(void * entry) {
-    task_t    * self  = thiscpu_var(tid_prev);
-    vmrange_t * range = vmspace_alloc(&self->process->vm, 16 * PAGE_SIZE);
-    vmspace_map(&self->process->vm, range);
+    task_t    * tid = thiscpu_var(tid_prev);
+    vmrange_t * rng = vmspace_alloc(&tid->process->vm, 16 * PAGE_SIZE);
 
-    dbg_assert(NULL == self->ustack);
-    self->ustack = range;
+    dbg_assert(NULL == tid->ustack);
+    vmspace_map(&tid->process->vm, rng);
+    tid->ustack = rng;
 
     // jump into user mode, won't return
-    return_to_user((usize) entry, range->addr + 16 * PAGE_SIZE);
+    return_to_user((usize) entry, rng->addr + 16 * PAGE_SIZE);
 }
 
 // entry of the newly spawned process, new vmspace, start in kernel mode
@@ -20,9 +20,9 @@ static void process_entry(void * entry, void * sp) {
     dbg_assert(((usize) sp % sizeof(usize)) == 0);
     dbg_print("new process running on cpu-%d, ip=%llx sp=%llx:\n", cpu_index(), entry, sp);
 
-    process_t * proc = thiscpu_var(tid_prev)->process;
-    proc->std[0] = ios_open("/dev/tty", IOS_READ);  // stdin
-    proc->std[1] = ios_open("/dev/tty", IOS_WRITE); // stdout
+    process_t * pid = thiscpu_var(tid_prev)->process;
+    pid->fd_array[0] = ios_open("/dev/tty", IOS_READ);  // stdin
+    pid->fd_array[1] = ios_open("/dev/tty", IOS_WRITE); // stdout
 
     return_to_user((usize) entry, (usize) sp);
 }
@@ -36,12 +36,18 @@ int do_unsupported() {
 }
 
 int do_exit(int exitcode) {
-    task_t    * self = thiscpu_var(tid_prev);
-    process_t * proc = self->process;
+    task_t    * tid = thiscpu_var(tid_prev);
+    process_t * pid = tid->process;
 
-    self->ret_val = exitcode;
-    ios_close(proc->std[0]);
-    ios_close(proc->std[1]);
+    tid->ret_val = exitcode;
+    tid->process = NULL;
+
+    if (NULL != pid) {
+        dl_remove(&pid->tasks, &tid->dl_proc);
+        if (dl_is_empty(&pid->tasks)) {
+            process_delete(pid);
+        }
+    }
 
     task_exit();
 
@@ -55,8 +61,12 @@ int do_wait(int subpid __UNUSED) {
 }
 
 int do_spawn_thread(void * entry) {
-    task_t * cur = thiscpu_var(tid_prev);
-    task_t * tid = task_create("new-thread", cur->priority, thread_entry, entry, 0,0,0);
+    task_t    * cur = thiscpu_var(tid_prev);
+    process_t * pid = cur->process;
+    dbg_assert(NULL != pid);
+
+    task_t * tid = task_create("new-thread", PRIORITY_NONRT, thread_entry, entry, 0,0,0);
+    dl_push_tail(&pid->tasks, &tid->dl_proc);
     task_resume(tid);
     return 0;
 }
@@ -175,22 +185,48 @@ int do_spawn_process(const char * filename,
     return 0;
 }
 
-int do_open(const char * filename __UNUSED) {
-    return 0;
+int do_open(const char * filename, int mode) {
+    process_t * pid = thiscpu_var(tid_prev)->process;
+
+    semaphore_take(&pid->fd_sem, SEM_WAIT_FOREVER);
+    for (int i = 0; i < 32; ++i) {
+        if (NULL != pid->fd_array[i]) {
+            continue;
+        }
+        pid->fd_array[i] = ios_open(filename, mode);
+        semaphore_give(&pid->fd_sem);
+        return i;
+    }
+    semaphore_give(&pid->fd_sem);
+
+    return -1;
 }
 
-int do_close(int fd __UNUSED) {
-    return 0;
+void do_close(int fd __UNUSED) {
+    process_t * pid = thiscpu_var(tid_prev)->process;
+
+    semaphore_take(&pid->fd_sem, SEM_WAIT_FOREVER);
+    if (NULL != pid->fd_array[fd]) {
+        ios_close(pid->fd_array[fd]);
+        pid->fd_array[fd] = NULL;
+    }
+    semaphore_give(&pid->fd_sem);
 }
 
-int do_read(int fd, void * buf, size_t count) {
-    process_t * proc = thiscpu_var(tid_prev)->process;
-    return ios_read(proc->std[fd], (u8 *) buf, count);
+size_t do_read(int fd, void * buf, size_t len) {
+    process_t * pid = thiscpu_var(tid_prev)->process;
+    semaphore_take(&pid->fd_sem, SEM_WAIT_FOREVER);
+    size_t ret = ios_read(pid->fd_array[fd], (u8 *) buf, len);
+    semaphore_give(&pid->fd_sem);
+    return ret;
 }
 
-int do_write(int fd, const void * buf, size_t count) {
-    process_t * proc = thiscpu_var(tid_prev)->process;
-    return ios_write(proc->std[fd], (const u8 *) buf, count);
+size_t do_write(int fd, const void * buf, size_t len) {
+    process_t * pid = thiscpu_var(tid_prev)->process;
+    semaphore_take(&pid->fd_sem, SEM_WAIT_FOREVER);
+    size_t ret = ios_write(pid->fd_array[fd], (const u8 *) buf, len);
+    semaphore_give(&pid->fd_sem);
+    return ret;
 }
 
 int do_magic() {
@@ -203,11 +239,11 @@ int do_magic() {
 
 __INIT void syscall_lib_init() {
     for (int i = 0; i < SYSCALL_NUM_COUNT; ++i) {
-        syscall_tbl[i] = (syscall_proc_t) do_unsupported;
+        syscall_tbl[i] = (void *) do_unsupported;
     }
 
-    #define DEFINE_SYSCALL(id, name, ...)   \
-        syscall_tbl[id] = (syscall_proc_t) do_ ## name;
+    #define DEFINE_SYSCALL(i, type, name, ...)   \
+        syscall_tbl[i] = (void *) do_ ## name;
     #include SYSCALL_DEF
     #undef DEFINE_SYSCALL
 }
